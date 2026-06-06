@@ -90,7 +90,7 @@ function generatePeerId(): string {
 // Hook
 // ---------------------------------------------------------------------------
 
-export function useMediasoup(roomId: string, displayName: string) {
+export function useMediasoup(roomId: string, displayName: string, create = false) {
   const [state, dispatch] = useReducer(reducer, {
     status: "idle",
     error: null,
@@ -335,6 +335,7 @@ export function useMediasoup(roomId: string, displayName: string) {
       const device = new Device()
       deviceRef.current = device
 
+      // First call joinRoom to get router RTP capabilities, then load device
       socket.emit(
         "joinRoom",
         {
@@ -342,6 +343,7 @@ export function useMediasoup(roomId: string, displayName: string) {
           peerId: peerId.current,
           displayName,
           rtpCapabilities: {},
+          create,
         },
         async (error: string | null, data: {
           rtpCapabilities: object
@@ -356,9 +358,11 @@ export function useMediasoup(roomId: string, displayName: string) {
             return
           }
 
+          // Load device with router capabilities BEFORE creating transports
           await device.load({ routerRtpCapabilities: data.rtpCapabilities as RTCRtpCapabilities })
 
           dispatch({ type: "CONNECTED", localStream })
+          // setupTransports uses device.rtpCapabilities which are now populated
           await setupTransports(socket, device, localStream, data.existingPeers)
         },
       )

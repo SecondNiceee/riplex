@@ -11,8 +11,7 @@ export function Hero() {
   const [joinOpen, setJoinOpen] = useState(false)
 
   function handleStart(roomCode: string) {
-    // Перейти в комнату
-    window.location.href = `/room/${roomCode}`
+    window.location.href = `/room/${roomCode}?create=true`
   }
 
   function handleJoin(roomCode: string) {

@@ -22,8 +22,15 @@ function getDisplayName(): string {
 // Page
 // ---------------------------------------------------------------------------
 
-export default function RoomPage({ params }: { params: Promise<{ roomId: string }> }) {
+export default function RoomPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ roomId: string }>
+  searchParams: Promise<{ create?: string }>
+}) {
   const { roomId } = use(params)
+  const { create } = use(searchParams)
   const router = useRouter()
   const displayName = getDisplayName()
 
@@ -37,7 +44,7 @@ export default function RoomPage({ params }: { params: Promise<{ roomId: string 
     toggleMic,
     toggleCam,
     leave,
-  } = useMediasoup(roomId, displayName)
+  } = useMediasoup(roomId, displayName, create === "true")
 
   const [copied, setCopied] = useState(false)
 

@@ -77,9 +77,13 @@ export function setupSocketIO(httpServer: HttpServer, worker: Worker): Server {
     socket.on(
       'joinRoom',
       async (payload: JoinRoomPayload, callback: Callback<{ rtpCapabilities: object; existingPeers: object[] }>) => {
-        const { roomId, peerId, displayName, rtpCapabilities } = payload
+        const { roomId, peerId, displayName, rtpCapabilities, create } = payload
 
         try {
+          if (!create && !rooms.has(roomId)) {
+            return err(callback as Callback<never>, 'Комната не найдена')
+          }
+
           const room = await getOrCreateRoom(roomId, worker)
 
           if (room.isFull()) return err(callback as Callback<never>, 'Room is full (max 5 participants)')
@@ -112,13 +116,13 @@ export function setupSocketIO(httpServer: HttpServer, worker: Worker): Server {
     socket.on(
       'createWebRtcTransport',
       async (payload: CreateTransportPayload, callback: Callback<object>) => {
-        const { roomId, peerId } = payload
+        const { roomId, peerId, direction } = payload
 
         try {
           const room = rooms.get(roomId)
           if (!room) return err(callback as Callback<never>, `Room ${roomId} not found`)
 
-          const transportData = await room.createWebRtcTransport(peerId)
+          const transportData = await room.createWebRtcTransport(peerId, direction ?? 'send')
           ack(callback, transportData)
         } catch (e) {
           err(callback as Callback<never>, (e as Error).message)
