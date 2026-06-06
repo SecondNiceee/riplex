@@ -24,13 +24,12 @@ export function Hero() {
       </span>
 
       <h1 className="max-w-3xl text-balance text-5xl font-semibold leading-[1.05] tracking-tight text-foreground sm:text-6xl md:text-7xl">
-        Звонки, которые просто работают.
+        Бессрочные видеозвонки в один клик.
       </h1>
 
       <p className="mt-6 max-w-xl text-pretty text-base leading-relaxed text-muted-foreground sm:text-lg">
-        Riplex дарит кристально чистые видеозвонки в один клик. Без аккаунтов,
-        без комнат ожидания, без лишних действий — просто нажмите «Начать» и вы
-        уже на связи.
+        Никаких таймеров и сложных настроек. Создайте комнату или присоединитесь
+        по коду — и говорите столько, сколько нужно.
       </p>
 
       <div className="mt-10 flex flex-col items-center gap-4 sm:flex-row">
@@ -54,9 +53,6 @@ export function Hero() {
         </Button>
       </div>
 
-      <p className="mt-8 text-sm text-muted-foreground">
-        Нам доверяют команды, совершающие более 2 млн звонков каждый месяц.
-      </p>
     </section>
   )
 }
