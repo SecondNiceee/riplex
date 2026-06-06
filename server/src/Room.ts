@@ -89,11 +89,14 @@ export class Room {
   // Transport
   // ---------------------------------------------------------------------------
 
-  async createWebRtcTransport(peerId: string): Promise<TransportCreatedPayload> {
+  async createWebRtcTransport(peerId: string, direction: 'send' | 'recv'): Promise<TransportCreatedPayload> {
     const peer = this.peers.get(peerId)
     if (!peer) throw new Error(`Peer ${peerId} not found in room ${this.id}`)
 
-    const transport = await this.router.createWebRtcTransport(webRtcTransportOptions)
+    const transport = await this.router.createWebRtcTransport({
+      ...webRtcTransportOptions,
+      appData: { direction },
+    })
 
     transport.on('dtlsstatechange', (dtlsState) => {
       if (dtlsState === 'closed') transport.close()
@@ -164,19 +167,10 @@ export class Room {
     const consumerPeer = this.peers.get(consumerPeerId)
     if (!consumerPeer) throw new Error(`Consumer peer ${consumerPeerId} not found`)
 
-    // Find recv transport for this peer
+    // Find recv transport for this peer (marked by appData.direction)
     let recvTransport = null
     for (const transport of consumerPeer.transports.values()) {
-      // recv transports have no producers from this peer
-      if (!consumerPeer.producers.has(transport.id)) {
-        recvTransport = transport
-        break
-      }
-    }
-
-    // Fallback: pick any transport that doesn't have producers
-    if (!recvTransport) {
-      for (const transport of consumerPeer.transports.values()) {
+      if ((transport.appData as Record<string, unknown>).direction === 'recv') {
         recvTransport = transport
         break
       }
