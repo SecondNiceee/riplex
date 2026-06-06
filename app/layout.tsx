@@ -10,9 +10,9 @@ const geistMono = Geist_Mono({
 })
 
 export const metadata: Metadata = {
-  title: 'Riplex — Мгновенные видеозвонки',
+  title: 'Riplexo — Мгновенные видеозвонки',
   description:
-    'Riplex позволяет начать кристально чистые видеозвонки мгновенно. Без установки, без лишних действий.',
+    'Riplexo позволяет начать кристально чистые видеозвонки мгновенно. Без установки, без лишних действий.',
   generator: 'v0.app',
   icons: {
     icon: [
