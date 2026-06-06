@@ -15,7 +15,7 @@ import { cn } from "@/lib/utils"
 
 function getDisplayName(): string {
   if (typeof window === "undefined") return "Гость"
-  return sessionStorage.getItem("riplex_display_name") ?? "Гость"
+  return sessionStorage.getItem("riplexo_display_name") ?? "Гость"
 }
 
 // ---------------------------------------------------------------------------
@@ -107,7 +107,7 @@ export default function RoomPage({ params }: { params: Promise<{ roomId: string 
       {/* Top bar */}
       <header className="flex items-center justify-between border-b border-border px-5 py-3">
         <div className="flex items-center gap-3">
-          <span className="text-sm font-semibold text-foreground">Riplex</span>
+          <span className="text-sm font-semibold text-foreground">Riplexo</span>
           <span className="h-4 w-px bg-border" />
           <button
             onClick={handleCopyCode}
