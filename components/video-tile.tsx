@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react"
 import { MicOff, VideoOff, User } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useSpeaking } from "@/hooks/use-speaking"
+import { registerAudioElement } from "@/lib/audio-unlock"
 
 interface VideoTileProps {
   stream?: MediaStream
@@ -42,30 +43,14 @@ export function VideoTile({
   }, [stream])
 
   // Play remote audio through a dedicated <audio> element. Local audio is
-  // never played back to avoid echo/feedback.
+  // never played back to avoid echo/feedback. Playback + autoplay-unlock is
+  // handled centrally by the audio-unlock manager.
   useEffect(() => {
     const audio = audioRef.current
     if (!audio || !audioStream || isLocal) return
     audio.srcObject = audioStream
-
-    const tryPlay = () => audio.play().catch(() => {})
-    tryPlay()
-
-    // Browsers block autoplay-with-sound until a user gesture. Since the room
-    // is joined automatically (no click), the first play() can be rejected.
-    // Retry on the first interaction anywhere on the page, then clean up.
-    const unlock = () => {
-      tryPlay()
-      window.removeEventListener("pointerdown", unlock)
-      window.removeEventListener("keydown", unlock)
-    }
-    window.addEventListener("pointerdown", unlock)
-    window.addEventListener("keydown", unlock)
-
-    return () => {
-      window.removeEventListener("pointerdown", unlock)
-      window.removeEventListener("keydown", unlock)
-    }
+    const unregister = registerAudioElement(audio)
+    return unregister
   }, [audioStream, isLocal])
 
   return (

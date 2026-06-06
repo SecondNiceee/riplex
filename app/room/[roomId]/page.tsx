@@ -12,6 +12,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { VideoTile } from "@/components/video-tile"
+import { EnableSoundBanner } from "@/components/enable-sound-banner"
 import { useMediasoup } from "@/hooks/use-mediasoup"
 import { useAudioDevices } from "@/hooks/use-audio-devices"
 import { cn } from "@/lib/utils"
@@ -122,6 +123,7 @@ export default function RoomPage({
 
   return (
     <div className="flex h-screen flex-col bg-background">
+      <EnableSoundBanner />
       {/* Top bar */}
       <header className="flex items-center justify-between border-b border-border px-5 py-3">
         <div className="flex items-center gap-3">
