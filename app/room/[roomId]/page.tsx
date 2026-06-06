@@ -169,6 +169,7 @@ export default function RoomPage({
           <VideoTile
             key={peer.peerId}
             stream={peer.videoStream}
+            audioStream={peer.audioStream}
             displayName={peer.displayName}
             className="h-full w-full"
           />

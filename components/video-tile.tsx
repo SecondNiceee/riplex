@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils"
 
 interface VideoTileProps {
   stream?: MediaStream
+  audioStream?: MediaStream
   displayName: string
   isMuted?: boolean
   isCamOff?: boolean
@@ -15,6 +16,7 @@ interface VideoTileProps {
 
 export function VideoTile({
   stream,
+  audioStream,
   displayName,
   isMuted = false,
   isCamOff = false,
@@ -22,12 +24,23 @@ export function VideoTile({
   className,
 }: VideoTileProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
+  const audioRef = useRef<HTMLAudioElement>(null)
 
   useEffect(() => {
     const video = videoRef.current
     if (!video || !stream) return
     video.srcObject = stream
   }, [stream])
+
+  // Play remote audio through a dedicated <audio> element. Local audio is
+  // never played back to avoid echo/feedback.
+  useEffect(() => {
+    const audio = audioRef.current
+    if (!audio || !audioStream || isLocal) return
+    audio.srcObject = audioStream
+    // Autoplay may be blocked until a user gesture — attempt and ignore errors.
+    audio.play().catch(() => {})
+  }, [audioStream, isLocal])
 
   return (
     <div
@@ -48,6 +61,9 @@ export function VideoTile({
           isLocal && "scale-x-[-1]",
         )}
       />
+
+      {/* Remote audio — local audio is muted to prevent echo */}
+      {!isLocal && <audio ref={audioRef} autoPlay playsInline className="hidden" />}
 
       {/* Cam off placeholder */}
       {(isCamOff || !stream) && (

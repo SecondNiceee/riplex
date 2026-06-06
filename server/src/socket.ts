@@ -100,6 +100,9 @@ export function setupSocketIO(httpServer: HttpServer, worker: Worker): Server {
           const existingPeers = room.getExistingPeersFor(peerId)
           console.log(`[room] Peer ${peerId} (${displayName}) joined room ${roomId} — peers: ${room.getPeerIds().length}`)
 
+          // Notify other peers that someone joined, even before they produce media
+          socket.to(roomId).emit('peerJoined', { peerId, displayName })
+
           ack(callback, {
             rtpCapabilities: room.getRtpCapabilities(),
             existingPeers,
