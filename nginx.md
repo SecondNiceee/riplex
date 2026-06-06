@@ -14,7 +14,7 @@ Nginx выступает reverse proxy: принимает HTTPS на 443, от�
 ```nginx
 server {
     listen 80;
-    server_name your-domain.com;
+    server_name riplexo.ru www.riplexo.ru;
 
     # Редирект HTTP → HTTPS
     return 301 https://$host$request_uri;
@@ -22,10 +22,10 @@ server {
 
 server {
     listen 443 ssl;
-    server_name your-domain.com;
+    server_name riplexo.ru www.riplexo.ru;
 
-    ssl_certificate     /etc/letsencrypt/live/your-domain.com/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/your-domain.com/privkey.pem;
+    ssl_certificate     /etc/letsencrypt/live/riplexo.ru/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/riplexo.ru/privkey.pem;
     ssl_protocols       TLSv1.2 TLSv1.3;
     ssl_ciphers         HIGH:!aNULL:!MD5;
 
@@ -67,7 +67,7 @@ sudo apt install nginx -y
 
 # Получить SSL-сертификат (Let's Encrypt)
 sudo apt install certbot python3-certbot-nginx -y
-sudo certbot --nginx -d your-domain.com
+sudo certbot --nginx -d riplexo.ru -d www.riplexo.ru
 
 # Скопировать конфиг
 sudo nano /etc/nginx/sites-available/riplexo
@@ -82,9 +82,8 @@ sudo systemctl reload nginx
 
 ## Важно
 
-- Замени `your-domain.com` на свой домен везде в конфиге.
-- После настройки Nginx обнови `NEXT_PUBLIC_MEDIASOUP_URL` в `.env.local` на `https://your-domain.com` — Socket.io клиент будет коннектиться через `/socket.io/` на том же домене, без порта.
-- Убедись, что в `server/.env` переменная `CLIENT_ORIGIN` указывает на `https://your-domain.com`.
+- После настройки Nginx обнови `NEXT_PUBLIC_MEDIASOUP_URL` в `.env.local` на `https://riplexo.ru` — Socket.io клиент будет коннектиться через `/socket.io/` на том же домене, без порта.
+- Убедись, что в `server/.env` переменная `CLIENT_ORIGIN` указывает на `https://riplexo.ru`.
 - UDP-порты Mediasoup (по умолчанию `10000-10100`) должны быть открыты в firewall:
   ```bash
   sudo ufw allow 10000:10100/udp
