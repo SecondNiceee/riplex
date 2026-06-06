@@ -1,33 +1,110 @@
-# riplex
+# Riplex — Видеоплатформа
 
-This is a [Next.js](https://nextjs.org) project bootstrapped with [v0](https://v0.app).
+Бессрочные видеозвонки в один клик. Никаких таймеров и сложных настроек.
 
-## Built with v0
+---
 
-This repository is linked to a [v0](https://v0.app) project. You can continue developing by visiting the link below -- start new chats to make changes, and v0 will push commits directly to this repo. Every merge to `main` will automatically deploy.
+## Структура проекта
 
-[Continue working on v0 →](https://v0.app/chat/projects/prj_HDb0R94z8Xxx1aty1lMixmUtz788)
-
-## Getting Started
-
-First, run the development server:
-
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
+```
+/
+├── app/
+│   ├── page.tsx                     # Главная страница
+│   └── room/[roomId]/page.tsx       # Страница видеозвонка
+├── components/
+│   ├── hero.tsx                     # Hero-секция с кнопками
+│   ├── start-call-dialog.tsx        # Попап «Начать звонок»
+│   ├── join-call-dialog.tsx         # Попап «Войти по коду»
+│   ├── video-tile.tsx               # Тайл участника
+│   └── site-header.tsx              # Хедер
+├── hooks/
+│   └── use-mediasoup.ts             # Вся логика WebRTC / mediasoup-client
+└── server/                          # Mediasoup бэкенд (Node.js, порт 3001)
+    └── src/
+        ├── index.ts                 # Точка входа — HTTP + Socket.io
+        ├── config.ts                # Конфигурация из .env
+        ├── Room.ts                  # Управление комнатой
+        ├── Peer.ts                  # Модель участника
+        ├── socket.ts                # Все Socket.io события
+        └── types.ts                 # TypeScript типы
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+---
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Переменные окружения
 
-## Learn More
+### Фронтенд — `.env.local` (корень проекта)
 
-To learn more, take a look at the following resources:
+Создать: `cp .env.local .env.local` — файл уже есть, заполни своими значениями.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-- [v0 Documentation](https://v0.app/docs) - learn about v0 and how to use it.
+| Переменная | Описание | Пример |
+|---|---|---|
+| `NEXT_PUBLIC_MEDIASOUP_URL` | URL Mediasoup сервера | `http://YOUR_SERVER_IP:3001` |
+| `NEXT_PUBLIC_STUN_URL` | STUN сервер | `stun:stun.example.com:3478` |
+| `NEXT_PUBLIC_TURN_URL` | TURN сервер | `turn:turn.example.com:3478` |
+| `NEXT_PUBLIC_TURN_USERNAME` | Логин TURN | `your_username` |
+| `NEXT_PUBLIC_TURN_CREDENTIAL` | Пароль TURN | `your_password` |
+
+### Бэкенд — `server/.env` (папка `server/`)
+
+Создать: `cp server/.env.example server/.env`, затем заполнить.
+
+| Переменная | Описание | Пример |
+|---|---|---|
+| `PORT` | Порт Mediasoup сервера | `3001` |
+| `ANNOUNCED_IP` | **Публичный IP сервера** (обязательно!) | `1.2.3.4` |
+| `CLIENT_ORIGIN` | URL фронтенда для CORS | `http://localhost:3000` |
+| `TURN_URL` | TURN сервер | `turn:turn.example.com:3478` |
+| `TURN_USERNAME` | Логин TURN | `your_username` |
+| `TURN_CREDENTIAL` | Пароль TURN | `your_password` |
+| `STUN_URL` | STUN сервер | `stun:stun.l.google.com:19302` |
+
+> `ANNOUNCED_IP` — самое важное поле. Укажи публичный IP VPS, иначе WebRTC не установит соединение между участниками.
+
+---
+
+## Запуск
+
+### Подготовка
+
+```bash
+# Заполни переменные окружения
+cp server/.env.example server/.env
+# Отредактируй server/.env — обязательно ANNOUNCED_IP и TURN-данные
+```
+
+### Разработка
+
+```bash
+# Фронтенд Next.js на :3000
+pnpm dev
+
+# Mediasoup сервер на :3001 (в отдельном терминале)
+pnpm mediasoup:dev
+```
+
+### Продакшн
+
+```bash
+# Фронтенд
+pnpm build && pnpm start
+
+# Mediasoup (собирает TypeScript и запускает)
+pnpm mediasoup
+```
+
+---
+
+## Как работает звонок
+
+1. Пользователь нажимает **«Начать звонок»** — генерируется код вида `4X9T-8WJS`
+2. Нажимает **«Начать конференцию»** — переход на `/room/4X9T-8WJS`
+3. Страница подключается к Mediasoup серверу через Socket.io ([`hooks/use-mediasoup.ts`](./hooks/use-mediasoup.ts))
+4. Создаются WebRTC транспорты (send + recv) через TURN/STUN
+5. Видео/аудио каждого участника публикуется как **Producer** на сервере
+6. Остальные участники получают потоки через **Consumer**
+7. Второй пользователь входит через **«Войти по коду»** — вводит `4X9T-8WJS` — попадает в ту же комнату
+
+---
+
+Built with [v0](https://v0.app) · [Continue working on v0 →](https://v0.app/chat/projects/prj_HDb0R94z8Xxx1aty1lMixmUtz788)
