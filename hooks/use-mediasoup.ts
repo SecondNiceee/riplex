@@ -30,6 +30,9 @@ interface State {
   localStream: MediaStream | null
   isMicMuted: boolean
   isCamOff: boolean
+  // whether the user has ever enabled mic/cam (i.e. track exists)
+  hasMic: boolean
+  hasCam: boolean
 }
 
 type Action =
@@ -39,8 +42,8 @@ type Action =
   | { type: "DISCONNECTED" }
   | { type: "PEER_STREAM"; peerId: string; displayName: string; kind: "video" | "audio"; stream: MediaStream }
   | { type: "PEER_LEFT"; peerId: string }
-  | { type: "TOGGLE_MIC"; isMuted: boolean }
-  | { type: "TOGGLE_CAM"; isOff: boolean }
+  | { type: "TOGGLE_MIC"; isMuted: boolean; hasMic?: boolean }
+  | { type: "TOGGLE_CAM"; isOff: boolean; hasCam?: boolean }
 
 function reducer(state: State, action: Action): State {
   switch (action.type) {
@@ -51,7 +54,7 @@ function reducer(state: State, action: Action): State {
     case "ERROR":
       return { ...state, status: "error", error: action.error }
     case "DISCONNECTED":
-      return { ...state, status: "disconnected", localStream: null, peers: new Map() }
+      return { ...state, status: "disconnected", localStream: null, peers: new Map(), hasMic: false, hasCam: false }
     case "PEER_STREAM": {
       const peers = new Map(state.peers)
       const existing = peers.get(action.peerId) ?? { peerId: action.peerId, displayName: action.displayName }
@@ -67,9 +70,9 @@ function reducer(state: State, action: Action): State {
       return { ...state, peers }
     }
     case "TOGGLE_MIC":
-      return { ...state, isMicMuted: action.isMuted }
+      return { ...state, isMicMuted: action.isMuted, hasMic: action.hasMic ?? state.hasMic }
     case "TOGGLE_CAM":
-      return { ...state, isCamOff: action.isOff }
+      return { ...state, isCamOff: action.isOff, hasCam: action.hasCam ?? state.hasCam }
     default:
       return state
   }
@@ -96,8 +99,10 @@ export function useMediasoup(roomId: string, displayName: string, create = false
     error: null,
     peers: new Map(),
     localStream: null,
-    isMicMuted: false,
-    isCamOff: false,
+    isMicMuted: true,
+    isCamOff: true,
+    hasMic: false,
+    hasCam: false,
   })
 
   const socketRef = useRef<Socket | null>(null)
@@ -187,7 +192,6 @@ export function useMediasoup(roomId: string, displayName: string, create = false
     async (
       socket: Socket,
       device: Device,
-      localStream: MediaStream,
       existingPeers: Array<{
         peerId: string
         displayName: string
@@ -242,19 +246,7 @@ export function useMediasoup(roomId: string, displayName: string, create = false
             )
           })
 
-          // Produce video
-          const videoTrack = localStream.getVideoTracks()[0]
-          if (videoTrack) {
-            const videoProducer = await sendTransport.produce({ track: videoTrack })
-            videoProducerRef.current = videoProducer
-          }
-
-          // Produce audio
-          const audioTrack = localStream.getAudioTracks()[0]
-          if (audioTrack) {
-            const audioProducer = await sendTransport.produce({ track: audioTrack })
-            audioProducerRef.current = audioProducer
-          }
+          // No tracks to produce on join — user enables mic/cam manually
         },
       )
 
@@ -315,14 +307,9 @@ export function useMediasoup(roomId: string, displayName: string, create = false
 
     dispatch({ type: "CONNECTING" })
 
-    let localStream: MediaStream
-    try {
-      localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true })
-      localStreamRef.current = localStream
-    } catch {
-      dispatch({ type: "ERROR", error: "Нет доступа к камере или микрофону" })
-      return
-    }
+    // Join without requesting camera/mic — user will enable them manually
+    const localStream = new MediaStream()
+    localStreamRef.current = localStream
 
     const socket = io(SERVER_URL, { transports: ["websocket"] })
     socketRef.current = socket
@@ -363,7 +350,7 @@ export function useMediasoup(roomId: string, displayName: string, create = false
 
           dispatch({ type: "CONNECTED", localStream })
           // setupTransports uses device.rtpCapabilities which are now populated
-          await setupTransports(socket, device, localStream, data.existingPeers)
+          await setupTransports(socket, device, data.existingPeers)
         },
       )
     })
@@ -410,27 +397,69 @@ export function useMediasoup(roomId: string, displayName: string, create = false
   }, [roomId])
 
   // -------------------------------------------------------------------------
-  // Toggle mic
+  // Toggle mic — requests permission on first use
   // -------------------------------------------------------------------------
-  const toggleMic = useCallback(() => {
+  const toggleMic = useCallback(async () => {
     const stream = localStreamRef.current
+    const sendTransport = sendTransportRef.current
     if (!stream) return
-    const track = stream.getAudioTracks()[0]
-    if (!track) return
-    track.enabled = !track.enabled
-    dispatch({ type: "TOGGLE_MIC", isMuted: !track.enabled })
+
+    const existing = stream.getAudioTracks()[0]
+
+    if (!existing) {
+      // First time — ask for permission
+      try {
+        const micStream = await navigator.mediaDevices.getUserMedia({ audio: true })
+        const track = micStream.getAudioTracks()[0]
+        stream.addTrack(track)
+        // Publish the track if transport is ready
+        if (sendTransport) {
+          const producer = await sendTransport.produce({ track })
+          audioProducerRef.current = producer
+        }
+        dispatch({ type: "TOGGLE_MIC", isMuted: false, hasMic: true })
+      } catch {
+        dispatch({ type: "ERROR", error: "Нет доступа к микрофону" })
+      }
+      return
+    }
+
+    // Already have track — just mute/unmute
+    existing.enabled = !existing.enabled
+    dispatch({ type: "TOGGLE_MIC", isMuted: !existing.enabled })
   }, [])
 
   // -------------------------------------------------------------------------
-  // Toggle cam
+  // Toggle cam — requests permission on first use
   // -------------------------------------------------------------------------
-  const toggleCam = useCallback(() => {
+  const toggleCam = useCallback(async () => {
     const stream = localStreamRef.current
+    const sendTransport = sendTransportRef.current
     if (!stream) return
-    const track = stream.getVideoTracks()[0]
-    if (!track) return
-    track.enabled = !track.enabled
-    dispatch({ type: "TOGGLE_CAM", isOff: !track.enabled })
+
+    const existing = stream.getVideoTracks()[0]
+
+    if (!existing) {
+      // First time — ask for permission
+      try {
+        const camStream = await navigator.mediaDevices.getUserMedia({ video: true })
+        const track = camStream.getVideoTracks()[0]
+        stream.addTrack(track)
+        // Publish the track if transport is ready
+        if (sendTransport) {
+          const producer = await sendTransport.produce({ track })
+          videoProducerRef.current = producer
+        }
+        dispatch({ type: "TOGGLE_CAM", isOff: false, hasCam: true })
+      } catch {
+        dispatch({ type: "ERROR", error: "Нет доступа к камере" })
+      }
+      return
+    }
+
+    // Already have track — just show/hide
+    existing.enabled = !existing.enabled
+    dispatch({ type: "TOGGLE_CAM", isOff: !existing.enabled })
   }, [])
 
   // -------------------------------------------------------------------------
@@ -451,6 +480,8 @@ export function useMediasoup(roomId: string, displayName: string, create = false
     localStream: state.localStream,
     isMicMuted: state.isMicMuted,
     isCamOff: state.isCamOff,
+    hasMic: state.hasMic,
+    hasCam: state.hasCam,
     toggleMic,
     toggleCam,
     leave,
