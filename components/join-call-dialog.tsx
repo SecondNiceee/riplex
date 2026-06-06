@@ -19,7 +19,10 @@ interface JoinCallDialogProps {
 }
 
 function normalizeCode(raw: string): string {
-  return raw.toUpperCase().replace(/[^A-Z0-9]/g, "")
+  // strip everything except letters, digits, dash — then ensure format XXXX-XXXX
+  const letters = raw.toUpperCase().replace(/[^A-Z0-9]/g, "")
+  if (letters.length <= 4) return letters
+  return `${letters.slice(0, 4)}-${letters.slice(4)}`
 }
 
 export function JoinCallDialog({ open, onOpenChange, onJoin }: JoinCallDialogProps) {
@@ -27,13 +30,19 @@ export function JoinCallDialog({ open, onOpenChange, onJoin }: JoinCallDialogPro
   const [error, setError] = useState("")
 
   const clean = normalizeCode(value)
-  const isValid = clean.length === 8
+  // valid when we have 4 letters + dash + 4 letters = 9 chars
+  const isValid = clean.length === 9
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
     setError("")
     const raw = e.target.value
-    const upper = raw.toUpperCase().replace(/[^A-Z0-9-]/g, "").slice(0, 9)
-    setValue(upper)
+    // keep only letters and digits, max 8 chars, then auto-format as XXXX-XXXX
+    const letters = raw.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 8)
+    if (letters.length <= 4) {
+      setValue(letters)
+    } else {
+      setValue(`${letters.slice(0, 4)}-${letters.slice(4)}`)
+    }
   }
 
   function handleJoin() {
