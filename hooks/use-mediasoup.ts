@@ -40,6 +40,7 @@ type Action =
   | { type: "CONNECTED"; localStream: MediaStream }
   | { type: "ERROR"; error: string }
   | { type: "DISCONNECTED" }
+  | { type: "PEER_JOINED"; peerId: string; displayName: string }
   | { type: "PEER_STREAM"; peerId: string; displayName: string; kind: "video" | "audio"; stream: MediaStream }
   | { type: "PEER_LEFT"; peerId: string }
   | { type: "TOGGLE_MIC"; isMuted: boolean; hasMic?: boolean }
@@ -55,6 +56,13 @@ function reducer(state: State, action: Action): State {
       return { ...state, status: "error", error: action.error }
     case "DISCONNECTED":
       return { ...state, status: "disconnected", localStream: null, peers: new Map(), hasMic: false, hasCam: false }
+    case "PEER_JOINED": {
+      const peers = new Map(state.peers)
+      if (!peers.has(action.peerId)) {
+        peers.set(action.peerId, { peerId: action.peerId, displayName: action.displayName })
+      }
+      return { ...state, peers }
+    }
     case "PEER_STREAM": {
       const peers = new Map(state.peers)
       const existing = peers.get(action.peerId) ?? { peerId: action.peerId, displayName: action.displayName }
@@ -338,10 +346,22 @@ export function useMediasoup(roomId: string, displayName: string, create = false
           await device.load({ routerRtpCapabilities: data.rtpCapabilities as RTCRtpCapabilities })
 
           dispatch({ type: "CONNECTED", localStream })
+
+          // Register existing peers immediately so the participant count is
+          // accurate even before any of them produce media.
+          for (const p of data.existingPeers) {
+            dispatch({ type: "PEER_JOINED", peerId: p.peerId, displayName: p.displayName })
+          }
+
           // setupTransports uses device.rtpCapabilities which are now populated
           await setupTransports(socket, device, data.existingPeers)
         },
       )
+    })
+
+    // A peer joined the room (may not have produced media yet)
+    socket.on("peerJoined", ({ peerId: joinedPeerId, displayName: joinedName }) => {
+      dispatch({ type: "PEER_JOINED", peerId: joinedPeerId, displayName: joinedName })
     })
 
     // New remote producer appeared
