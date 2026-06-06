@@ -14,6 +14,7 @@ export interface JoinRoomPayload {
   peerId: string
   displayName: string
   rtpCapabilities: object
+  create?: boolean
 }
 
 export interface CreateTransportPayload {

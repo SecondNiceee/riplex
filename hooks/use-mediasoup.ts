@@ -90,7 +90,7 @@ function generatePeerId(): string {
 // Hook
 // ---------------------------------------------------------------------------
 
-export function useMediasoup(roomId: string, displayName: string) {
+export function useMediasoup(roomId: string, displayName: string, create = false) {
   const [state, dispatch] = useReducer(reducer, {
     status: "idle",
     error: null,
@@ -343,6 +343,7 @@ export function useMediasoup(roomId: string, displayName: string) {
           peerId: peerId.current,
           displayName,
           rtpCapabilities: {},
+          create,
         },
         async (error: string | null, data: {
           rtpCapabilities: object

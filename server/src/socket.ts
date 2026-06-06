@@ -77,9 +77,13 @@ export function setupSocketIO(httpServer: HttpServer, worker: Worker): Server {
     socket.on(
       'joinRoom',
       async (payload: JoinRoomPayload, callback: Callback<{ rtpCapabilities: object; existingPeers: object[] }>) => {
-        const { roomId, peerId, displayName, rtpCapabilities } = payload
+        const { roomId, peerId, displayName, rtpCapabilities, create } = payload
 
         try {
+          if (!create && !rooms.has(roomId)) {
+            return err(callback as Callback<never>, 'Комната не найдена')
+          }
+
           const room = await getOrCreateRoom(roomId, worker)
 
           if (room.isFull()) return err(callback as Callback<never>, 'Room is full (max 5 participants)')
