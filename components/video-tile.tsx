@@ -3,10 +3,14 @@
 import { useEffect, useRef } from "react"
 import { MicOff, VideoOff, User } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { useSpeaking } from "@/hooks/use-speaking"
 
 interface VideoTileProps {
   stream?: MediaStream
   audioStream?: MediaStream
+  // For the local tile we don't get a separate audioStream, so the parent can
+  // pass the local stream here purely for the speaking indicator.
+  speakingStream?: MediaStream
   displayName: string
   isMuted?: boolean
   isCamOff?: boolean
@@ -17,6 +21,7 @@ interface VideoTileProps {
 export function VideoTile({
   stream,
   audioStream,
+  speakingStream,
   displayName,
   isMuted = false,
   isCamOff = false,
@@ -25,6 +30,10 @@ export function VideoTile({
 }: VideoTileProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const audioRef = useRef<HTMLAudioElement>(null)
+
+  // Analyse the relevant audio stream to drive the "speaking" ring.
+  const analysedStream = isLocal ? speakingStream : audioStream
+  const speaking = useSpeaking(analysedStream, !isMuted)
 
   useEffect(() => {
     const video = videoRef.current
@@ -38,14 +47,32 @@ export function VideoTile({
     const audio = audioRef.current
     if (!audio || !audioStream || isLocal) return
     audio.srcObject = audioStream
-    // Autoplay may be blocked until a user gesture — attempt and ignore errors.
-    audio.play().catch(() => {})
+
+    const tryPlay = () => audio.play().catch(() => {})
+    tryPlay()
+
+    // Browsers block autoplay-with-sound until a user gesture. Since the room
+    // is joined automatically (no click), the first play() can be rejected.
+    // Retry on the first interaction anywhere on the page, then clean up.
+    const unlock = () => {
+      tryPlay()
+      window.removeEventListener("pointerdown", unlock)
+      window.removeEventListener("keydown", unlock)
+    }
+    window.addEventListener("pointerdown", unlock)
+    window.addEventListener("keydown", unlock)
+
+    return () => {
+      window.removeEventListener("pointerdown", unlock)
+      window.removeEventListener("keydown", unlock)
+    }
   }, [audioStream, isLocal])
 
   return (
     <div
       className={cn(
-        "relative flex items-center justify-center overflow-hidden rounded-2xl bg-secondary",
+        "relative flex items-center justify-center overflow-hidden rounded-2xl bg-secondary transition-all",
+        speaking && "ring-2 ring-green-500 ring-offset-2 ring-offset-background",
         className,
       )}
     >

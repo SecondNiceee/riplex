@@ -157,6 +157,7 @@ export default function RoomPage({
         {/* Local tile */}
         <VideoTile
           stream={localStream ?? undefined}
+          speakingStream={localStream ?? undefined}
           displayName={displayName}
           isMuted={isMicMuted}
           isCamOff={isCamOff}
