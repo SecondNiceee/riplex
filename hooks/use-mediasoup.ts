@@ -113,6 +113,7 @@ export function useMediasoup(roomId: string, displayName: string, create = false
   const localStreamRef = useRef<MediaStream | null>(null)
   const videoProducerRef = useRef<Producer | null>(null)
   const audioProducerRef = useRef<Producer | null>(null)
+  const selectedMicIdRef = useRef<string | undefined>(undefined)
   // consumerId -> Consumer
   const consumersRef = useRef<Map<string, Consumer>>(new Map())
 
@@ -188,6 +189,76 @@ export function useMediasoup(roomId: string, displayName: string, create = false
   // -------------------------------------------------------------------------
   // Create send/recv transports and start producing
   // -------------------------------------------------------------------------
+  const createTransport = useCallback(
+    (
+      socket: Socket,
+      device: Device,
+      direction: "send" | "recv",
+    ): Promise<ReturnType<Device["createSendTransport"]> | ReturnType<Device["createRecvTransport"]>> => {
+      return new Promise((resolve, reject) => {
+        socket.emit(
+          "createWebRtcTransport",
+          { roomId, peerId: peerId.current, direction },
+          (error: string | null, transportData: {
+            transportId: string
+            iceParameters: object
+            iceCandidates: object[]
+            dtlsParameters: object
+            iceServers: object[]
+          } | undefined) => {
+            if (error || !transportData) {
+              reject(new Error(`createWebRtcTransport ${direction}: ${error}`))
+              return
+            }
+
+            const opts = {
+              id: transportData.transportId,
+              iceParameters: transportData.iceParameters as RTCIceParameters,
+              iceCandidates: transportData.iceCandidates as RTCIceCandidate[],
+              dtlsParameters: transportData.dtlsParameters as RTCDtlsParameters,
+              iceServers: transportData.iceServers as RTCIceServer[],
+            }
+
+            const transport =
+              direction === "send"
+                ? device.createSendTransport(opts)
+                : device.createRecvTransport(opts)
+
+            transport.on("connect", ({ dtlsParameters }, callback, errback) => {
+              socket.emit(
+                "connectTransport",
+                { roomId, peerId: peerId.current, transportId: transport.id, dtlsParameters },
+                (err: string | null) => {
+                  if (err) errback(new Error(err))
+                  else callback()
+                },
+              )
+            })
+
+            if (direction === "send") {
+              (transport as ReturnType<Device["createSendTransport"]>).on(
+                "produce",
+                ({ kind, rtpParameters, appData }, callback, errback) => {
+                  socket.emit(
+                    "produce",
+                    { roomId, peerId: peerId.current, transportId: transport.id, kind, rtpParameters, appData },
+                    (err: string | null, data: { producerId: string } | undefined) => {
+                      if (err || !data) errback(new Error(err ?? "produce failed"))
+                      else callback({ id: data.producerId })
+                    },
+                  )
+                },
+              )
+            }
+
+            resolve(transport)
+          },
+        )
+      })
+    },
+    [roomId],
+  )
+
   const setupTransports = useCallback(
     async (
       socket: Socket,
@@ -198,105 +269,23 @@ export function useMediasoup(roomId: string, displayName: string, create = false
         producers: { producerId: string; kind: string }[]
       }>,
     ) => {
-      // -- SEND transport --
-      socket.emit(
-        "createWebRtcTransport",
-        { roomId, peerId: peerId.current, direction: "send" },
-        async (error: string | null, transportData: {
-          transportId: string
-          iceParameters: object
-          iceCandidates: object[]
-          dtlsParameters: object
-          iceServers: object[]
-        } | undefined) => {
-          if (error || !transportData) {
-            dispatch({ type: "ERROR", error: `createWebRtcTransport send: ${error}` })
-            return
-          }
+      // Both transports created in parallel, properly awaited
+      const [sendTransport, recvTransport] = await Promise.all([
+        createTransport(socket, device, "send"),
+        createTransport(socket, device, "recv"),
+      ])
 
-          const sendTransport = device.createSendTransport({
-            id: transportData.transportId,
-            iceParameters: transportData.iceParameters as RTCIceParameters,
-            iceCandidates: transportData.iceCandidates as RTCIceCandidate[],
-            dtlsParameters: transportData.dtlsParameters as RTCDtlsParameters,
-            iceServers: transportData.iceServers as RTCIceServer[],
-          })
+      sendTransportRef.current = sendTransport as ReturnType<Device["createSendTransport"]>
+      recvTransportRef.current = recvTransport as ReturnType<Device["createRecvTransport"]>
 
-          sendTransportRef.current = sendTransport
-
-          sendTransport.on("connect", ({ dtlsParameters }, callback, errback) => {
-            socket.emit(
-              "connectTransport",
-              { roomId, peerId: peerId.current, transportId: sendTransport.id, dtlsParameters },
-              (err: string | null) => {
-                if (err) errback(new Error(err))
-                else callback()
-              },
-            )
-          })
-
-          sendTransport.on("produce", ({ kind, rtpParameters, appData }, callback, errback) => {
-            socket.emit(
-              "produce",
-              { roomId, peerId: peerId.current, transportId: sendTransport.id, kind, rtpParameters, appData },
-              (err: string | null, data: { producerId: string } | undefined) => {
-                if (err || !data) errback(new Error(err ?? "produce failed"))
-                else callback({ id: data.producerId })
-              },
-            )
-          })
-
-          // No tracks to produce on join — user enables mic/cam manually
-        },
-      )
-
-      // -- RECV transport --
-      socket.emit(
-        "createWebRtcTransport",
-        { roomId, peerId: peerId.current, direction: "recv" },
-        async (error: string | null, transportData: {
-          transportId: string
-          iceParameters: object
-          iceCandidates: object[]
-          dtlsParameters: object
-          iceServers: object[]
-        } | undefined) => {
-          if (error || !transportData) {
-            dispatch({ type: "ERROR", error: `createWebRtcTransport recv: ${error}` })
-            return
-          }
-
-          const recvTransport = device.createRecvTransport({
-            id: transportData.transportId,
-            iceParameters: transportData.iceParameters as RTCIceParameters,
-            iceCandidates: transportData.iceCandidates as RTCIceCandidate[],
-            dtlsParameters: transportData.dtlsParameters as RTCDtlsParameters,
-            iceServers: transportData.iceServers as RTCIceServer[],
-          })
-
-          recvTransportRef.current = recvTransport
-
-          recvTransport.on("connect", ({ dtlsParameters }, callback, errback) => {
-            socket.emit(
-              "connectTransport",
-              { roomId, peerId: peerId.current, transportId: recvTransport.id, dtlsParameters },
-              (err: string | null) => {
-                if (err) errback(new Error(err))
-                else callback()
-              },
-            )
-          })
-
-          // Consume existing peers
-          for (const peer of existingPeers) {
-            for (const { producerId, kind } of peer.producers) {
-              await consumeProducer(peer.peerId, peer.displayName, producerId, kind as "audio" | "video")
-            }
-          }
-        },
-      )
+      // Consume existing peers — recv transport is guaranteed ready now
+      for (const peer of existingPeers) {
+        for (const { producerId, kind } of peer.producers) {
+          await consumeProducer(peer.peerId, peer.displayName, producerId, kind as "audio" | "video")
+        }
+      }
     },
-    [roomId, consumeProducer],
+    [createTransport, consumeProducer],
   )
 
   // -------------------------------------------------------------------------
@@ -409,12 +398,16 @@ export function useMediasoup(roomId: string, displayName: string, create = false
     if (!existing) {
       // First time — ask for permission
       try {
-        const micStream = await navigator.mediaDevices.getUserMedia({ audio: true })
+        const constraints: MediaStreamConstraints = {
+          audio: selectedMicIdRef.current
+            ? { deviceId: { exact: selectedMicIdRef.current } }
+            : true,
+        }
+        const micStream = await navigator.mediaDevices.getUserMedia(constraints)
         const track = micStream.getAudioTracks()[0]
         stream.addTrack(track)
-        // Publish the track if transport is ready
         if (sendTransport) {
-          const producer = await sendTransport.produce({ track })
+          const producer = await (sendTransport as ReturnType<Device["createSendTransport"]>).produce({ track })
           audioProducerRef.current = producer
         }
         dispatch({ type: "TOGGLE_MIC", isMuted: false, hasMic: true })
@@ -427,6 +420,41 @@ export function useMediasoup(roomId: string, displayName: string, create = false
     // Already have track — just mute/unmute
     existing.enabled = !existing.enabled
     dispatch({ type: "TOGGLE_MIC", isMuted: !existing.enabled })
+  }, [])
+
+  // Switch to a different microphone device mid-call
+  const switchMic = useCallback(async (deviceId: string) => {
+    selectedMicIdRef.current = deviceId
+    const stream = localStreamRef.current
+    const sendTransport = sendTransportRef.current
+    if (!stream) return
+
+    // Replace existing audio track with the new device
+    const oldTrack = stream.getAudioTracks()[0]
+    try {
+      const micStream = await navigator.mediaDevices.getUserMedia({
+        audio: { deviceId: { exact: deviceId } },
+      })
+      const newTrack = micStream.getAudioTracks()[0]
+
+      if (oldTrack) {
+        oldTrack.stop()
+        stream.removeTrack(oldTrack)
+      }
+      stream.addTrack(newTrack)
+
+      const producer = audioProducerRef.current
+      if (producer && sendTransport) {
+        await producer.replaceTrack({ track: newTrack })
+      } else if (!producer && sendTransport) {
+        // Track was never published — publish now
+        const newProducer = await (sendTransport as ReturnType<Device["createSendTransport"]>).produce({ track: newTrack })
+        audioProducerRef.current = newProducer
+        dispatch({ type: "TOGGLE_MIC", isMuted: false, hasMic: true })
+      }
+    } catch {
+      dispatch({ type: "ERROR", error: "Не удалось переключить микрофон" })
+    }
   }, [])
 
   // -------------------------------------------------------------------------
@@ -484,6 +512,7 @@ export function useMediasoup(roomId: string, displayName: string, create = false
     hasCam: state.hasCam,
     toggleMic,
     toggleCam,
+    switchMic,
     leave,
   }
 }
