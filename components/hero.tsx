@@ -1,7 +1,24 @@
+"use client"
+
+import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Video, ArrowRight } from "lucide-react"
+import { StartCallDialog } from "@/components/start-call-dialog"
+import { JoinCallDialog } from "@/components/join-call-dialog"
 
 export function Hero() {
+  const [startOpen, setStartOpen] = useState(false)
+  const [joinOpen, setJoinOpen] = useState(false)
+
+  function handleStart(roomCode: string) {
+    // Перейти в комнату
+    window.location.href = `/room/${roomCode}`
+  }
+
+  function handleJoin(roomCode: string) {
+    window.location.href = `/room/${roomCode}`
+  }
+
   return (
     <section className="relative flex min-h-screen flex-col items-center justify-center px-6 text-center">
       {/* subtle radial glow */}
@@ -36,6 +53,7 @@ export function Hero() {
         <Button
           size="lg"
           className="group h-14 gap-2.5 rounded-full px-8 text-base font-semibold"
+          onClick={() => setStartOpen(true)}
         >
           <Video className="size-5" strokeWidth={2.25} aria-hidden="true" />
           Начать звонок
@@ -48,11 +66,22 @@ export function Hero() {
           variant="ghost"
           size="lg"
           className="h-14 rounded-full px-6 text-base text-muted-foreground hover:bg-secondary hover:text-foreground"
+          onClick={() => setJoinOpen(true)}
         >
           Войти по коду
         </Button>
       </div>
 
+      <StartCallDialog
+        open={startOpen}
+        onOpenChange={setStartOpen}
+        onStart={handleStart}
+      />
+      <JoinCallDialog
+        open={joinOpen}
+        onOpenChange={setJoinOpen}
+        onJoin={handleJoin}
+      />
     </section>
   )
 }
