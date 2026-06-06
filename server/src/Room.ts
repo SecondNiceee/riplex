@@ -1,4 +1,4 @@
-import type { Router, Worker } from 'mediasoup/node/lib/types'
+import type { Router, Worker, DtlsParameters } from 'mediasoup/node/lib/types'
 import * as mediasoup from 'mediasoup'
 import { mediaCodecs, webRtcTransportOptions, MAX_PEERS_PER_ROOM, iceServers } from './config'
 import { Peer } from './Peer'
@@ -113,7 +113,7 @@ export class Room {
   async connectTransport(
     peerId: string,
     transportId: string,
-    dtlsParameters: object,
+    dtlsParameters: DtlsParameters,
   ): Promise<void> {
     const peer = this.peers.get(peerId)
     if (!peer) throw new Error(`Peer ${peerId} not found`)
