@@ -1,5 +1,5 @@
 import 'dotenv/config'
-import type { RtpCodecCapability, TransportListenIp } from 'mediasoup/node/lib/types'
+import type { RtpCodecCapability, TransportListenIp, WorkerLogTag } from 'mediasoup/node/lib/types'
 
 // ---------------------------------------------------------------------------
 // Server
@@ -43,28 +43,27 @@ export const workerSettings = {
   rtcMinPort: 40000,
   rtcMaxPort: 49999,
   logLevel: 'warn' as const,
-  logTags: ['info', 'ice', 'dtls', 'rtp', 'srtp', 'rtcp'] as const,
+  logTags: ['info', 'ice', 'dtls', 'rtp', 'srtp', 'rtcp'] as WorkerLogTag[],
 }
 
 // ---------------------------------------------------------------------------
 // Router media codecs
 // ---------------------------------------------------------------------------
 
-export const mediaCodecs: RtpCodecCapability[] = [
+export const mediaCodecs = [
   {
-    kind: 'audio',
+    kind: 'audio' as const,
     mimeType: 'audio/opus',
     clockRate: 48000,
     channels: 2,
   },
   {
-    kind: 'video',
+    kind: 'video' as const,
     mimeType: 'video/VP8',
     clockRate: 90000,
-    parameters: {},
   },
   {
-    kind: 'video',
+    kind: 'video' as const,
     mimeType: 'video/H264',
     clockRate: 90000,
     parameters: {
@@ -73,7 +72,7 @@ export const mediaCodecs: RtpCodecCapability[] = [
       'level-asymmetry-allowed': 1,
     },
   },
-]
+] as RtpCodecCapability[]
 
 // ---------------------------------------------------------------------------
 // WebRtcTransport options

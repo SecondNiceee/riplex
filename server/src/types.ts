@@ -1,5 +1,6 @@
 import type {
   Consumer,
+  DtlsParameters,
   Producer,
   WebRtcTransport,
 } from 'mediasoup/node/lib/types'
@@ -25,7 +26,7 @@ export interface ConnectTransportPayload {
   roomId: string
   peerId: string
   transportId: string
-  dtlsParameters: object
+  dtlsParameters: DtlsParameters
 }
 
 export interface ProducePayload {

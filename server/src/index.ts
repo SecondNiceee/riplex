@@ -1,6 +1,6 @@
 import 'dotenv/config'
 import http from 'http'
-import express from 'express'
+import express, { type Request, type Response } from 'express'
 import cors from 'cors'
 import * as mediasoup from 'mediasoup'
 import { PORT, CLIENT_ORIGIN, workerSettings } from './config'
@@ -16,7 +16,7 @@ async function main(): Promise<void> {
   app.use(express.json())
 
   // Health check
-  app.get('/health', (_req, res) => {
+  app.get('/health', (_req: Request, res: Response) => {
     res.json({ status: 'ok', uptime: process.uptime() })
   })
 
