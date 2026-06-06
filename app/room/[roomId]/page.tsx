@@ -2,11 +2,18 @@
 
 import { use } from "react"
 import { useRouter } from "next/navigation"
-import { Mic, MicOff, Video, VideoOff, PhoneOff, Copy, Check } from "lucide-react"
+import { Mic, MicOff, Video, VideoOff, PhoneOff, Copy, Check, ChevronDown } from "lucide-react"
 import { useState, useCallback } from "react"
 import { Button } from "@/components/ui/button"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { VideoTile } from "@/components/video-tile"
 import { useMediasoup } from "@/hooks/use-mediasoup"
+import { useAudioDevices } from "@/hooks/use-audio-devices"
 import { cn } from "@/lib/utils"
 
 // ---------------------------------------------------------------------------
@@ -43,8 +50,12 @@ export default function RoomPage({
     isCamOff,
     toggleMic,
     toggleCam,
+    switchMic,
     leave,
   } = useMediasoup(roomId, displayName, create === "true")
+
+  const { devices: micDevices } = useAudioDevices()
+  const [selectedMicLabel, setSelectedMicLabel] = useState<string | null>(null)
 
   const [copied, setCopied] = useState(false)
 
@@ -136,7 +147,7 @@ export default function RoomPage({
             )}
           />
           <span className="text-xs text-muted-foreground">
-            {allPeers.length + 1} участник{allPeers.length + 1 !== 1 ? "а" : ""}
+            {peers.size + 1} участник{peers.size + 1 !== 1 ? "а" : ""}
           </span>
         </div>
       </header>
@@ -166,18 +177,51 @@ export default function RoomPage({
 
       {/* Controls */}
       <footer className="flex items-center justify-center gap-3 border-t border-border px-5 py-4">
-        <Button
-          variant="outline"
-          size="icon"
-          onClick={toggleMic}
-          className={cn(
-            "size-12 rounded-full",
-            isMicMuted && "border-destructive bg-destructive/10 text-destructive hover:bg-destructive/20",
-          )}
-          aria-label={isMicMuted ? "Включить микрофон" : "Выключить микрофон"}
-        >
-          {isMicMuted ? <MicOff className="size-5" /> : <Mic className="size-5" />}
-        </Button>
+        {/* Mic button + device picker */}
+        <div className="flex items-center">
+          <Button
+            variant="outline"
+            onClick={toggleMic}
+            className={cn(
+              "size-12 rounded-full rounded-r-none border-r-0",
+              isMicMuted && "border-destructive bg-destructive/10 text-destructive hover:bg-destructive/20",
+            )}
+            aria-label={isMicMuted ? "Включить микрофон" : "Выключить микрофон"}
+          >
+            {isMicMuted ? <MicOff className="size-5" /> : <Mic className="size-5" />}
+          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="outline"
+                className={cn(
+                  "h-12 w-6 rounded-l-none px-1",
+                  isMicMuted && "border-destructive bg-destructive/10 text-destructive hover:bg-destructive/20",
+                )}
+                aria-label="Выбрать микрофон"
+              >
+                <ChevronDown className="size-3" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="center" side="top">
+              {micDevices.length === 0 && (
+                <DropdownMenuItem disabled>Нет доступных микрофонов</DropdownMenuItem>
+              )}
+              {micDevices.map((d) => (
+                <DropdownMenuItem
+                  key={d.deviceId}
+                  onSelect={async () => {
+                    setSelectedMicLabel(d.label)
+                    await switchMic(d.deviceId)
+                  }}
+                  className={cn(selectedMicLabel === d.label && "font-medium")}
+                >
+                  {d.label}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
 
         <Button
           variant="outline"
