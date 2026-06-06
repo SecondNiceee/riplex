@@ -10,9 +10,9 @@ const geistMono = Geist_Mono({
 })
 
 export const metadata: Metadata = {
-  title: 'Riplex — Instant Video Calls',
+  title: 'Riplex — Мгновенные видеозвонки',
   description:
-    'Riplex lets you start crystal-clear video calls instantly. No downloads, no friction.',
+    'Riplex позволяет начать кристально чистые видеозвонки мгновенно. Без установки, без лишних действий.',
   generator: 'v0.app',
   icons: {
     icon: [
@@ -40,7 +40,7 @@ export default function RootLayout({
 }>) {
   return (
     <html
-      lang="en"
+      lang="ru"
       className={`${geistSans.variable} ${geistMono.variable} bg-background`}
     >
       <body className="font-sans antialiased">

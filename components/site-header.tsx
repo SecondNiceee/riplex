@@ -8,21 +8,26 @@ export function SiteHeader() {
         <Logo />
         <nav className="hidden items-center gap-8 text-sm text-muted-foreground md:flex">
           <a href="#" className="transition-colors hover:text-foreground">
-            Features
+            Возможности
           </a>
           <a href="#" className="transition-colors hover:text-foreground">
-            Pricing
+            Тарифы
           </a>
           <a href="#" className="transition-colors hover:text-foreground">
-            Company
+            Компания
           </a>
         </nav>
-        <Button
-          variant="ghost"
-          className="text-sm text-muted-foreground hover:bg-secondary hover:text-foreground"
-        >
-          Sign in
-        </Button>
+        <div className="flex items-center gap-2">
+          <span className="inline-flex items-center rounded-full border border-border bg-secondary/50 px-2.5 py-1 text-xs font-medium text-foreground">
+            RU
+          </span>
+          <Button
+            variant="ghost"
+            className="text-sm text-muted-foreground hover:bg-secondary hover:text-foreground"
+          >
+            Войти
+          </Button>
+        </div>
       </div>
     </header>
   )

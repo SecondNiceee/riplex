@@ -1,7 +1,24 @@
+"use client"
+
+import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Video, ArrowRight } from "lucide-react"
+import { StartCallDialog } from "@/components/start-call-dialog"
+import { JoinCallDialog } from "@/components/join-call-dialog"
 
 export function Hero() {
+  const [startOpen, setStartOpen] = useState(false)
+  const [joinOpen, setJoinOpen] = useState(false)
+
+  function handleStart(roomCode: string) {
+    // Перейти в комнату
+    window.location.href = `/room/${roomCode}`
+  }
+
+  function handleJoin(roomCode: string) {
+    window.location.href = `/room/${roomCode}`
+  }
+
   return (
     <section className="relative flex min-h-screen flex-col items-center justify-center px-6 text-center">
       {/* subtle radial glow */}
@@ -20,25 +37,26 @@ export function Hero() {
           <span className="absolute inline-flex size-full animate-ping rounded-full bg-foreground opacity-60" />
           <span className="relative inline-flex size-2 rounded-full bg-foreground" />
         </span>
-        Live now — no downloads required
+        В эфире — без установки приложений
       </span>
 
       <h1 className="max-w-3xl text-balance text-5xl font-semibold leading-[1.05] tracking-tight text-foreground sm:text-6xl md:text-7xl">
-        Calls that just connect.
+        Бессрочные видеозвонки в один клик.
       </h1>
 
       <p className="mt-6 max-w-xl text-pretty text-base leading-relaxed text-muted-foreground sm:text-lg">
-        Riplex gives you crystal-clear video calls in one click. No accounts, no
-        waiting rooms, no friction — just press start and you&apos;re in.
+        Никаких таймеров и сложных настроек. Создайте комнату или присоединитесь
+        по коду — и говорите столько, сколько нужно.
       </p>
 
       <div className="mt-10 flex flex-col items-center gap-4 sm:flex-row">
         <Button
           size="lg"
           className="group h-14 gap-2.5 rounded-full px-8 text-base font-semibold"
+          onClick={() => setStartOpen(true)}
         >
           <Video className="size-5" strokeWidth={2.25} aria-hidden="true" />
-          Start a call
+          Начать звонок
           <ArrowRight
             className="size-4 transition-transform group-hover:translate-x-1"
             aria-hidden="true"
@@ -48,14 +66,22 @@ export function Hero() {
           variant="ghost"
           size="lg"
           className="h-14 rounded-full px-6 text-base text-muted-foreground hover:bg-secondary hover:text-foreground"
+          onClick={() => setJoinOpen(true)}
         >
-          Join with a code
+          Войти по коду
         </Button>
       </div>
 
-      <p className="mt-8 text-sm text-muted-foreground">
-        Trusted by teams making over 2M calls every month.
-      </p>
+      <StartCallDialog
+        open={startOpen}
+        onOpenChange={setStartOpen}
+        onStart={handleStart}
+      />
+      <JoinCallDialog
+        open={joinOpen}
+        onOpenChange={setJoinOpen}
+        onJoin={handleJoin}
+      />
     </section>
   )
 }
