@@ -52,6 +52,12 @@ export interface ResumeConsumerPayload {
   consumerId: string
 }
 
+export interface CloseProducerPayload {
+  roomId: string
+  peerId: string
+  producerId: string
+}
+
 // ---------------------------------------------------------------------------
 // Socket event payloads  (server → client)
 // ---------------------------------------------------------------------------
@@ -93,6 +99,11 @@ export interface NewProducerPayload {
 
 export interface PeerLeftPayload {
   peerId: string
+}
+
+export interface ProducerClosedPayload {
+  peerId: string
+  producerId: string
 }
 
 // ---------------------------------------------------------------------------
