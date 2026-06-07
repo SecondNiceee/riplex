@@ -1,7 +1,7 @@
 "use client"
 
-import { useEffect, useRef } from "react"
-import { MicOff, VideoOff, User } from "lucide-react"
+import { useEffect, useRef, useState } from "react"
+import { MicOff, VideoOff, User, Volume2, VolumeX } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useSpeaking } from "@/hooks/use-speaking"
 import { registerAudioElement } from "@/lib/audio-unlock"
@@ -32,6 +32,10 @@ export function VideoTile({
   const videoRef = useRef<HTMLVideoElement>(null)
   const audioRef = useRef<HTMLAudioElement>(null)
 
+  // Per-user local audio controls (remote tiles only).
+  const [localMuted, setLocalMuted] = useState(false)
+  const [volume, setVolume] = useState(1)
+
   // Analyse the relevant audio stream to drive the "speaking" ring.
   const analysedStream = isLocal ? speakingStream : audioStream
   const speaking = useSpeaking(analysedStream, !isMuted)
@@ -61,10 +65,18 @@ export function VideoTile({
     return unregister
   }, [audioStream, isLocal])
 
+  // Apply per-user local mute / volume to the remote audio element.
+  useEffect(() => {
+    const audio = audioRef.current
+    if (!audio || isLocal) return
+    audio.volume = volume
+    audio.muted = localMuted
+  }, [volume, localMuted, isLocal])
+
   return (
     <div
       className={cn(
-        "relative flex items-center justify-center overflow-hidden rounded-2xl bg-secondary transition-all",
+        "group relative flex items-center justify-center overflow-hidden rounded-2xl bg-secondary transition-all",
         speaking && "ring-2 ring-green-500 ring-offset-2 ring-offset-background",
         className,
       )}
@@ -84,6 +96,33 @@ export function VideoTile({
 
       {/* Remote audio — local audio is muted to prevent echo */}
       {!isLocal && <audio ref={audioRef} autoPlay playsInline className="hidden" />}
+
+      {/* Per-user volume control (remote tiles only) */}
+      {!isLocal && (
+        <div className="absolute right-2 top-2 flex items-center gap-1.5 rounded-full bg-black/45 px-1.5 py-1 opacity-0 backdrop-blur-sm transition-opacity duration-200 focus-within:opacity-100 group-hover:opacity-100">
+          <button
+            onClick={() => setLocalMuted((m) => !m)}
+            className="flex size-6 items-center justify-center rounded-full text-white transition-colors hover:bg-white/15"
+            aria-label={localMuted ? "Включить звук участника" : "Выключить звук участника"}
+          >
+            {localMuted || volume === 0 ? <VolumeX className="size-3.5" /> : <Volume2 className="size-3.5" />}
+          </button>
+          <input
+            type="range"
+            min={0}
+            max={1}
+            step={0.05}
+            value={localMuted ? 0 : volume}
+            onChange={(e) => {
+              const v = Number(e.target.value)
+              setVolume(v)
+              setLocalMuted(v === 0)
+            }}
+            aria-label="Громкость участника"
+            className="h-1 w-16 cursor-pointer appearance-none rounded-full bg-white/30 accent-white"
+          />
+        </div>
+      )}
 
       {/* Cam off placeholder */}
       {(isCamOff || !stream) && (
@@ -118,6 +157,11 @@ export function VideoTile({
           {isCamOff && (
             <span className="flex size-5 items-center justify-center rounded-full bg-black/45 backdrop-blur-sm">
               <VideoOff className="size-2.5 text-white" />
+            </span>
+          )}
+          {!isLocal && localMuted && (
+            <span className="flex size-5 items-center justify-center rounded-full bg-black/45 backdrop-blur-sm">
+              <VolumeX className="size-2.5 text-white" />
             </span>
           )}
         </div>
