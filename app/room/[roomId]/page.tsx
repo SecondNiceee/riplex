@@ -2,9 +2,11 @@
 
 import { use } from "react"
 import { useRouter } from "next/navigation"
-import { Mic, MicOff, Video, VideoOff, PhoneOff, Copy, Check, ChevronDown } from "lucide-react"
+import { Mic, MicOff, Video, VideoOff, PhoneOff, Copy, Check, ChevronDown, Pencil } from "lucide-react"
 import { useState, useCallback } from "react"
 import { Button } from "@/components/ui/button"
+import { EditNameDialog } from "@/components/edit-name-dialog"
+import { getDisplayName } from "@/lib/display-name"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -16,15 +18,6 @@ import { EnableSoundBanner } from "@/components/enable-sound-banner"
 import { useMediasoup } from "@/hooks/use-mediasoup"
 import { useAudioDevices } from "@/hooks/use-audio-devices"
 import { cn } from "@/lib/utils"
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function getDisplayName(): string {
-  if (typeof window === "undefined") return "Гость"
-  return sessionStorage.getItem("riplexo_display_name") ?? "Гость"
-}
 
 // ---------------------------------------------------------------------------
 // Page
@@ -41,6 +34,12 @@ export default function RoomPage({
   const { create } = use(searchParams)
   const router = useRouter()
   const displayName = getDisplayName()
+  const [editNameOpen, setEditNameOpen] = useState(false)
+
+  const handleNameSaved = useCallback(() => {
+    // Reconnect with the new name so other peers see the update.
+    window.location.reload()
+  }, [])
 
   const {
     status,
@@ -141,16 +140,27 @@ export default function RoomPage({
             )}
           </button>
         </div>
-        <div className="flex items-center gap-2">
-          <span
-            className={cn(
-              "size-2 rounded-full",
-              status === "connected" ? "bg-green-500" : "bg-muted-foreground",
-            )}
-          />
-          <span className="text-xs text-muted-foreground">
-            {peers.size + 1} участник{peers.size + 1 !== 1 ? "а" : ""}
-          </span>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setEditNameOpen(true)}
+            className="group flex items-center gap-1.5 rounded-lg bg-secondary px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
+            aria-label="Изменить имя"
+          >
+            <span className="max-w-[120px] truncate font-medium">{displayName}</span>
+            <Pencil className="size-3 opacity-60 transition-opacity group-hover:opacity-100" />
+          </button>
+          <span className="h-4 w-px bg-border" />
+          <div className="flex items-center gap-2">
+            <span
+              className={cn(
+                "size-2 rounded-full",
+                status === "connected" ? "bg-green-500" : "bg-muted-foreground",
+              )}
+            />
+            <span className="text-xs text-muted-foreground">
+              {peers.size + 1} участник{peers.size + 1 !== 1 ? "а" : ""}
+            </span>
+          </div>
         </div>
       </header>
 
@@ -209,7 +219,7 @@ export default function RoomPage({
             </DropdownMenuTrigger>
             <DropdownMenuContent align="center" side="top">
               {micDevices.length === 0 && (
-                <DropdownMenuItem disabled>Нет доступных микрофонов</DropdownMenuItem>
+                <DropdownMenuItem disabled>��ет доступных микрофонов</DropdownMenuItem>
               )}
               {micDevices.map((d) => (
                 <DropdownMenuItem
@@ -250,6 +260,13 @@ export default function RoomPage({
           <PhoneOff className="size-5" />
         </Button>
       </footer>
+
+      <EditNameDialog
+        open={editNameOpen}
+        onOpenChange={setEditNameOpen}
+        currentName={displayName}
+        onSaved={handleNameSaved}
+      />
     </div>
   )
 }
