@@ -83,7 +83,7 @@ export const webRtcTransportOptions = {
   enableUdp: true,
   enableTcp: true,
   preferUdp: true,
-  initialAvailableOutgoingBitrate: 800_000,
+  initialAvailableOutgoingBitrate: 3_000_000,
   minimumAvailableOutgoingBitrate: 100_000,
   maxSctpMessageSize: 262144,
 }

@@ -11,13 +11,20 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { VideoTile } from "@/components/video-tile"
 import { EnableSoundBanner } from "@/components/enable-sound-banner"
-import { useMediasoup } from "@/hooks/use-mediasoup"
+import { useMediasoup, type ScreenQuality } from "@/hooks/use-mediasoup"
 import { useAudioDevices } from "@/hooks/use-audio-devices"
 import { cn } from "@/lib/utils"
+
+const SCREEN_QUALITY_OPTIONS: { value: ScreenQuality; label: string }[] = [
+  { value: "auto", label: "Авто" },
+  { value: "720p", label: "720p" },
+  { value: "1080p", label: "1080p (Full HD)" },
+]
 
 // ---------------------------------------------------------------------------
 // Page
@@ -53,6 +60,8 @@ export default function RoomPage({
     toggleMic,
     toggleCam,
     toggleScreenShare,
+    screenQuality,
+    setScreenQuality,
     switchMic,
     leave,
   } = useMediasoup(roomId, displayName, create === "true")
@@ -112,12 +121,15 @@ export default function RoomPage({
   // -------------------------------------------------------------------------
   const allPeers = [...peers.values()]
 
-  // Count screen-share tiles (local + any remote peer currently sharing).
+  // Collect every active screen share (local + remote) as primary "stage" tiles.
   const remoteScreens = allPeers.filter((p) => p.screenStream)
-  const screenTileCount = (isScreenSharing && localScreenStream ? 1 : 0) + remoteScreens.length
-  const totalTiles = allPeers.length + 1 + screenTileCount // +1 for local camera
+  const hasScreenShare = (isScreenSharing && localScreenStream) || remoteScreens.length > 0
 
-  // Grid layout based on participant count
+  // Camera tiles (local + remote) shown either in the grid or the filmstrip.
+  const totalTiles =
+    allPeers.length + 1 + (isScreenSharing && localScreenStream ? 1 : 0) + remoteScreens.length
+
+  // Grid layout based on participant count (only used when nobody is sharing).
   const gridClass =
     totalTiles === 1
       ? "grid-cols-1"
@@ -126,6 +138,58 @@ export default function RoomPage({
         : totalTiles <= 4
           ? "grid-cols-2"
           : "grid-cols-3"
+
+  // Camera tiles rendered as a reusable list so they can live in the grid
+  // (no screen share) or in the filmstrip (screen share active).
+  const cameraTiles = (
+    <>
+      <VideoTile
+        stream={localStream ?? undefined}
+        speakingStream={localStream ?? undefined}
+        displayName={displayName}
+        isMuted={isMicMuted}
+        isCamOff={isCamOff}
+        isLocal
+        className="h-full w-full"
+      />
+      {allPeers.map((peer) => (
+        <VideoTile
+          key={peer.peerId}
+          stream={peer.videoStream}
+          audioStream={peer.audioStream}
+          displayName={peer.displayName}
+          className="h-full w-full"
+        />
+      ))}
+    </>
+  )
+
+  // Screen share tiles rendered as the large "stage" content.
+  const screenTiles = (
+    <>
+      {isScreenSharing && localScreenStream && (
+        <VideoTile
+          key="local-screen"
+          stream={localScreenStream}
+          speakingStream={undefined}
+          displayName={displayName}
+          isLocal
+          isScreen
+          className="h-full w-full"
+        />
+      )}
+      {remoteScreens.map((peer) => (
+        <VideoTile
+          key={`${peer.peerId}-screen`}
+          stream={peer.screenStream}
+          audioStream={peer.screenAudioStream}
+          displayName={peer.displayName}
+          isScreen
+          className="h-full w-full"
+        />
+      ))}
+    </>
+  )
 
   return (
     <div className="flex h-screen flex-col bg-background">
@@ -171,55 +235,51 @@ export default function RoomPage({
         </div>
       </header>
 
-      {/* Video grid */}
-      <main className={cn("grid flex-1 gap-2 p-3", gridClass)}>
-        {/* Local tile */}
-        <VideoTile
-          stream={localStream ?? undefined}
-          speakingStream={localStream ?? undefined}
-          displayName={displayName}
-          isMuted={isMicMuted}
-          isCamOff={isCamOff}
-          isLocal
-          className="h-full w-full"
-        />
+      {/* Video area */}
+      {hasScreenShare ? (
+        // Speaker layout: screen share takes the stage, cameras in a filmstrip.
+        <main className="flex flex-1 flex-col gap-2 overflow-hidden p-3 lg:flex-row">
+          {/* Stage — one or more shared screens */}
+          <div
+            className={cn(
+              "grid min-h-0 flex-1 gap-2",
+              remoteScreens.length + (isScreenSharing && localScreenStream ? 1 : 0) > 1
+                ? "grid-cols-1 sm:grid-cols-2"
+                : "grid-cols-1",
+            )}
+          >
+            {screenTiles}
+          </div>
 
-        {/* Remote tiles */}
-        {allPeers.map((peer) => (
-          <VideoTile
-            key={peer.peerId}
-            stream={peer.videoStream}
-            audioStream={peer.audioStream}
-            displayName={peer.displayName}
-            className="h-full w-full"
-          />
-        ))}
-
-        {/* Local screen share tile */}
-        {isScreenSharing && localScreenStream && (
-          <VideoTile
-            key="local-screen"
-            stream={localScreenStream}
-            speakingStream={undefined}
-            displayName={displayName}
-            isLocal
-            isScreen
-            className="h-full w-full"
-          />
-        )}
-
-        {/* Remote screen share tiles */}
-        {remoteScreens.map((peer) => (
-          <VideoTile
-            key={`${peer.peerId}-screen`}
-            stream={peer.screenStream}
-            audioStream={peer.screenAudioStream}
-            displayName={peer.displayName}
-            isScreen
-            className="h-full w-full"
-          />
-        ))}
-      </main>
+          {/* Filmstrip — camera tiles */}
+          <div className="flex shrink-0 gap-2 overflow-x-auto lg:w-52 lg:flex-col lg:overflow-y-auto lg:overflow-x-hidden">
+            {[
+              <VideoTile
+                key="local"
+                stream={localStream ?? undefined}
+                speakingStream={localStream ?? undefined}
+                displayName={displayName}
+                isMuted={isMicMuted}
+                isCamOff={isCamOff}
+                isLocal
+                className="aspect-video h-28 w-auto shrink-0 lg:h-auto lg:w-full"
+              />,
+              ...allPeers.map((peer) => (
+                <VideoTile
+                  key={peer.peerId}
+                  stream={peer.videoStream}
+                  audioStream={peer.audioStream}
+                  displayName={peer.displayName}
+                  className="aspect-video h-28 w-auto shrink-0 lg:h-auto lg:w-full"
+                />
+              )),
+            ]}
+          </div>
+        </main>
+      ) : (
+        // Default grid layout when nobody is sharing their screen.
+        <main className={cn("grid flex-1 gap-2 p-3", gridClass)}>{cameraTiles}</main>
+      )}
 
       {/* Controls */}
       <footer className="flex items-center justify-center gap-3 border-t border-border px-5 py-4">
@@ -282,18 +342,47 @@ export default function RoomPage({
           {isCamOff ? <VideoOff className="size-5" /> : <Video className="size-5" />}
         </Button>
 
-        <Button
-          variant="outline"
-          size="icon"
-          onClick={toggleScreenShare}
-          className={cn(
-            "size-12 rounded-full",
-            isScreenSharing && "border-foreground bg-foreground/10 text-foreground hover:bg-foreground/20",
-          )}
-          aria-label={isScreenSharing ? "Остановить демонстрацию экрана" : "Демонстрация экрана"}
-        >
-          {isScreenSharing ? <MonitorOff className="size-5" /> : <MonitorUp className="size-5" />}
-        </Button>
+        {/* Screen share button + quality picker */}
+        <div className="flex items-center">
+          <Button
+            variant="outline"
+            onClick={toggleScreenShare}
+            className={cn(
+              "size-12 rounded-full rounded-r-none border-r-0",
+              isScreenSharing && "border-foreground bg-foreground/10 text-foreground hover:bg-foreground/20",
+            )}
+            aria-label={isScreenSharing ? "Остановить демонстрацию экрана" : "Демонстрация экрана"}
+          >
+            {isScreenSharing ? <MonitorOff className="size-5" /> : <MonitorUp className="size-5" />}
+          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="outline"
+                className={cn(
+                  "h-12 w-6 rounded-l-none px-1",
+                  isScreenSharing && "border-foreground bg-foreground/10 text-foreground hover:bg-foreground/20",
+                )}
+                aria-label="Качество демонстрации экрана"
+              >
+                <ChevronDown className="size-3" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="center" side="top">
+              <DropdownMenuLabel>Качество экрана</DropdownMenuLabel>
+              {SCREEN_QUALITY_OPTIONS.map((opt) => (
+                <DropdownMenuItem
+                  key={opt.value}
+                  onSelect={() => setScreenQuality(opt.value)}
+                  className="flex items-center justify-between gap-4"
+                >
+                  <span className={cn(screenQuality === opt.value && "font-medium")}>{opt.label}</span>
+                  {screenQuality === opt.value && <Check className="size-3.5 text-foreground" />}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
 
         <Button
           variant="destructive"
