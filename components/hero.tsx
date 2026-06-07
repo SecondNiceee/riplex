@@ -39,7 +39,7 @@ export function Hero() {
         В эфире — без установки приложений
       </span>
 
-      <h1 className="max-w-3xl text-balance text-5xl font-semibold leading-[1.05] tracking-tight text-foreground sm:text-6xl md:text-7xl">
+      <h1 className="max-w-6xl text-balance text-5xl font-semibold leading-[1.05] tracking-tight text-foreground sm:text-6xl md:text-7xl">
         Бессрочные видеозвонки в один клик.
       </h1>
 
