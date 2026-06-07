@@ -216,6 +216,22 @@ export class Room {
     }
   }
 
+  async pauseProducer(peerId: string, producerId: string): Promise<void> {
+    const peer = this.peers.get(peerId)
+    if (!peer) throw new Error(`Peer ${peerId} not found`)
+    const producer = peer.producers.get(producerId)
+    if (!producer) throw new Error(`Producer ${producerId} not found`)
+    await producer.pause()
+  }
+
+  async resumeProducer(peerId: string, producerId: string): Promise<void> {
+    const peer = this.peers.get(peerId)
+    if (!peer) throw new Error(`Peer ${peerId} not found`)
+    const producer = peer.producers.get(producerId)
+    if (!producer) throw new Error(`Producer ${producerId} not found`)
+    await producer.resume()
+  }
+
   async resumeConsumer(peerId: string, consumerId: string): Promise<void> {
     const peer = this.peers.get(peerId)
     if (!peer) throw new Error(`Peer ${peerId} not found`)
