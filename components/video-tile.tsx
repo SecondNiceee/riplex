@@ -16,6 +16,8 @@ interface VideoTileProps {
   isMuted?: boolean
   isCamOff?: boolean
   isLocal?: boolean
+  // Screen share tiles render the video "contained" and never mirrored.
+  isScreen?: boolean
   className?: string
 }
 
@@ -27,6 +29,7 @@ export function VideoTile({
   isMuted = false,
   isCamOff = false,
   isLocal = false,
+  isScreen = false,
   className,
 }: VideoTileProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
@@ -88,9 +91,11 @@ export function VideoTile({
         playsInline
         muted={isLocal || isMuted}
         className={cn(
-          "h-full w-full object-cover",
-          (isCamOff || !stream) && "invisible",
-          isLocal && "scale-x-[-1]",
+          "h-full w-full",
+          isScreen ? "object-contain" : "object-cover",
+          (!isScreen && (isCamOff || !stream)) && "invisible",
+          isScreen && !stream && "invisible",
+          isLocal && !isScreen && "scale-x-[-1]",
         )}
       />
 
@@ -125,7 +130,7 @@ export function VideoTile({
       )}
 
       {/* Cam off placeholder */}
-      {(isCamOff || !stream) && (
+      {!isScreen && (isCamOff || !stream) && (
         <div className="absolute inset-0 flex items-center justify-center">
           <div
             className={cn(
@@ -146,7 +151,11 @@ export function VideoTile({
       {/* Bottom bar */}
       <div className="absolute bottom-0 left-0 right-0 flex items-center justify-between gap-2 px-2 py-1.5">
         <span className="max-w-[70%] truncate rounded-md bg-black/45 px-1.5 py-0.5 text-[11px] font-medium leading-none text-white backdrop-blur-sm">
-          {isLocal ? `${displayName} (вы)` : displayName}
+          {isScreen
+            ? `${displayName}${isLocal ? " (вы)" : ""} — экран`
+            : isLocal
+              ? `${displayName} (вы)`
+              : displayName}
         </span>
         <div className="flex items-center gap-1">
           {isMuted && (
