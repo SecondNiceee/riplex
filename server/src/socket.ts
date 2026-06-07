@@ -11,6 +11,7 @@ import type {
   ProducePayload,
   ConsumePayload,
   ResumeConsumerPayload,
+  CloseProducerPayload,
 } from './types'
 
 // ---------------------------------------------------------------------------
@@ -222,6 +223,30 @@ export function setupSocketIO(httpServer: HttpServer, worker: Worker): Server {
           ack(callback, undefined)
         } catch (e) {
           err(callback as Callback<never>, (e as Error).message)
+        }
+      },
+    )
+
+    // -----------------------------------------------------------------------
+    // closeProducer  (e.g. stop screen sharing)
+    // -----------------------------------------------------------------------
+    socket.on(
+      'closeProducer',
+      (payload: CloseProducerPayload, callback?: Callback<void>) => {
+        const { roomId, peerId, producerId } = payload
+
+        try {
+          const room = rooms.get(roomId)
+          if (!room) {
+            if (callback) return err(callback as Callback<never>, `Room ${roomId} not found`)
+            return
+          }
+
+          room.closeProducer(peerId, producerId)
+          socket.to(roomId).emit('producerClosed', { peerId, producerId })
+          if (callback) ack(callback, undefined)
+        } catch (e) {
+          if (callback) err(callback as Callback<never>, (e as Error).message)
         }
       },
     )

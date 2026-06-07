@@ -206,6 +206,16 @@ export class Room {
     }
   }
 
+  closeProducer(peerId: string, producerId: string): void {
+    const peer = this.peers.get(peerId)
+    if (!peer) return
+    const producer = peer.producers.get(producerId)
+    if (producer) {
+      producer.close()
+      peer.producers.delete(producerId)
+    }
+  }
+
   async resumeConsumer(peerId: string, consumerId: string): Promise<void> {
     const peer = this.peers.get(peerId)
     if (!peer) throw new Error(`Peer ${peerId} not found`)

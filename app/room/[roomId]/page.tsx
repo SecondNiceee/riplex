@@ -2,7 +2,7 @@
 
 import { use } from "react"
 import { useRouter } from "next/navigation"
-import { Mic, MicOff, Video, VideoOff, PhoneOff, Copy, Check, ChevronDown, Pencil } from "lucide-react"
+import { Mic, MicOff, Video, VideoOff, PhoneOff, Copy, Check, ChevronDown, Pencil, MonitorUp, MonitorOff } from "lucide-react"
 import { useState, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { EditNameDialog } from "@/components/edit-name-dialog"
@@ -48,8 +48,11 @@ export default function RoomPage({
     localStream,
     isMicMuted,
     isCamOff,
+    isScreenSharing,
+    localScreenStream,
     toggleMic,
     toggleCam,
+    toggleScreenShare,
     switchMic,
     leave,
   } = useMediasoup(roomId, displayName, create === "true")
@@ -108,7 +111,11 @@ export default function RoomPage({
   // Active call
   // -------------------------------------------------------------------------
   const allPeers = [...peers.values()]
-  const totalTiles = allPeers.length + 1 // +1 for local
+
+  // Count screen-share tiles (local + any remote peer currently sharing).
+  const remoteScreens = allPeers.filter((p) => p.screenStream)
+  const screenTileCount = (isScreenSharing && localScreenStream ? 1 : 0) + remoteScreens.length
+  const totalTiles = allPeers.length + 1 + screenTileCount // +1 for local camera
 
   // Grid layout based on participant count
   const gridClass =
@@ -187,6 +194,31 @@ export default function RoomPage({
             className="h-full w-full"
           />
         ))}
+
+        {/* Local screen share tile */}
+        {isScreenSharing && localScreenStream && (
+          <VideoTile
+            key="local-screen"
+            stream={localScreenStream}
+            speakingStream={undefined}
+            displayName={displayName}
+            isLocal
+            isScreen
+            className="h-full w-full"
+          />
+        )}
+
+        {/* Remote screen share tiles */}
+        {remoteScreens.map((peer) => (
+          <VideoTile
+            key={`${peer.peerId}-screen`}
+            stream={peer.screenStream}
+            audioStream={peer.screenAudioStream}
+            displayName={peer.displayName}
+            isScreen
+            className="h-full w-full"
+          />
+        ))}
       </main>
 
       {/* Controls */}
@@ -248,6 +280,19 @@ export default function RoomPage({
           aria-label={isCamOff ? "Включить камеру" : "Выключить камеру"}
         >
           {isCamOff ? <VideoOff className="size-5" /> : <Video className="size-5" />}
+        </Button>
+
+        <Button
+          variant="outline"
+          size="icon"
+          onClick={toggleScreenShare}
+          className={cn(
+            "size-12 rounded-full",
+            isScreenSharing && "border-foreground bg-foreground/10 text-foreground hover:bg-foreground/20",
+          )}
+          aria-label={isScreenSharing ? "Остановить демонстрацию экрана" : "Демонстрация экрана"}
+        >
+          {isScreenSharing ? <MonitorOff className="size-5" /> : <MonitorUp className="size-5" />}
         </Button>
 
         <Button

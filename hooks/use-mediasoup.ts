@@ -14,6 +14,8 @@ export interface RemotePeer {
   displayName: string
   videoStream?: MediaStream
   audioStream?: MediaStream
+  screenStream?: MediaStream
+  screenAudioStream?: MediaStream
 }
 
 export type RoomStatus =
@@ -30,6 +32,7 @@ interface State {
   localStream: MediaStream | null
   isMicMuted: boolean
   isCamOff: boolean
+  isScreenSharing: boolean
   // whether the user has ever enabled mic/cam (i.e. track exists)
   hasMic: boolean
   hasCam: boolean
@@ -41,10 +44,12 @@ type Action =
   | { type: "ERROR"; error: string }
   | { type: "DISCONNECTED" }
   | { type: "PEER_JOINED"; peerId: string; displayName: string }
-  | { type: "PEER_STREAM"; peerId: string; displayName: string; kind: "video" | "audio"; stream: MediaStream }
+  | { type: "PEER_STREAM"; peerId: string; displayName: string; kind: "video" | "audio"; source: "media" | "screen"; stream: MediaStream }
+  | { type: "PEER_PRODUCER_CLOSED"; peerId: string; source: "media" | "screen"; kind: "video" | "audio" }
   | { type: "PEER_LEFT"; peerId: string }
   | { type: "TOGGLE_MIC"; isMuted: boolean; hasMic?: boolean }
   | { type: "TOGGLE_CAM"; isOff: boolean; hasCam?: boolean }
+  | { type: "SET_SCREEN_SHARING"; isSharing: boolean }
 
 function reducer(state: State, action: Action): State {
   switch (action.type) {
@@ -66,10 +71,35 @@ function reducer(state: State, action: Action): State {
     case "PEER_STREAM": {
       const peers = new Map(state.peers)
       const existing = peers.get(action.peerId) ?? { peerId: action.peerId, displayName: action.displayName }
+      const key =
+        action.source === "screen"
+          ? action.kind === "video"
+            ? "screenStream"
+            : "screenAudioStream"
+          : action.kind === "video"
+            ? "videoStream"
+            : "audioStream"
       peers.set(action.peerId, {
         ...existing,
-        ...(action.kind === "video" ? { videoStream: action.stream } : { audioStream: action.stream }),
+        [key]: action.stream,
       })
+      return { ...state, peers }
+    }
+    case "PEER_PRODUCER_CLOSED": {
+      const peers = new Map(state.peers)
+      const existing = peers.get(action.peerId)
+      if (!existing) return state
+      const key =
+        action.source === "screen"
+          ? action.kind === "video"
+            ? "screenStream"
+            : "screenAudioStream"
+          : action.kind === "video"
+            ? "videoStream"
+            : "audioStream"
+      const updated = { ...existing }
+      delete updated[key]
+      peers.set(action.peerId, updated)
       return { ...state, peers }
     }
     case "PEER_LEFT": {
@@ -81,6 +111,8 @@ function reducer(state: State, action: Action): State {
       return { ...state, isMicMuted: action.isMuted, hasMic: action.hasMic ?? state.hasMic }
     case "TOGGLE_CAM":
       return { ...state, isCamOff: action.isOff, hasCam: action.hasCam ?? state.hasCam }
+    case "SET_SCREEN_SHARING":
+      return { ...state, isScreenSharing: action.isSharing }
     default:
       return state
   }
@@ -109,6 +141,7 @@ export function useMediasoup(roomId: string, displayName: string, create = false
     localStream: null,
     isMicMuted: true,
     isCamOff: true,
+    isScreenSharing: false,
     hasMic: false,
     hasCam: false,
   })
@@ -121,6 +154,9 @@ export function useMediasoup(roomId: string, displayName: string, create = false
   const localStreamRef = useRef<MediaStream | null>(null)
   const videoProducerRef = useRef<Producer | null>(null)
   const audioProducerRef = useRef<Producer | null>(null)
+  const screenVideoProducerRef = useRef<Producer | null>(null)
+  const screenAudioProducerRef = useRef<Producer | null>(null)
+  const screenStreamRef = useRef<MediaStream | null>(null)
   const selectedMicIdRef = useRef<string | undefined>(undefined)
   // consumerId -> Consumer
   const consumersRef = useRef<Map<string, Consumer>>(new Map())
@@ -134,6 +170,7 @@ export function useMediasoup(roomId: string, displayName: string, create = false
       displayName: string,
       producerId: string,
       kind: "audio" | "video",
+      appData?: Record<string, unknown>,
     ) => {
       const socket = socketRef.current
       const device = deviceRef.current
@@ -161,11 +198,17 @@ export function useMediasoup(roomId: string, displayName: string, create = false
             return
           }
 
+          const source =
+            (appData?.source ?? (data.appData as Record<string, unknown>)?.source) === "screen"
+              ? "screen"
+              : "media"
+
           const consumer = await recvTransport.consume({
             id: data.consumerId,
             producerId: data.producerId,
             kind: data.kind as "audio" | "video",
             rtpParameters: data.rtpParameters as RTCRtpParameters,
+            appData: { source },
           })
 
           consumersRef.current.set(consumer.id, consumer)
@@ -177,6 +220,7 @@ export function useMediasoup(roomId: string, displayName: string, create = false
             peerId: remotePeerId,
             displayName,
             kind,
+            source,
             stream,
           })
 
@@ -274,7 +318,7 @@ export function useMediasoup(roomId: string, displayName: string, create = false
       existingPeers: Array<{
         peerId: string
         displayName: string
-        producers: { producerId: string; kind: string }[]
+        producers: { producerId: string; kind: string; appData?: Record<string, unknown> }[]
       }>,
     ) => {
       // Both transports created in parallel, properly awaited
@@ -288,8 +332,8 @@ export function useMediasoup(roomId: string, displayName: string, create = false
 
       // Consume existing peers — recv transport is guaranteed ready now
       for (const peer of existingPeers) {
-        for (const { producerId, kind } of peer.producers) {
-          await consumeProducer(peer.peerId, peer.displayName, producerId, kind as "audio" | "video")
+        for (const { producerId, kind, appData } of peer.producers) {
+          await consumeProducer(peer.peerId, peer.displayName, producerId, kind as "audio" | "video", appData)
         }
       }
     },
@@ -334,7 +378,7 @@ export function useMediasoup(roomId: string, displayName: string, create = false
           existingPeers: Array<{
             peerId: string
             displayName: string
-            producers: { producerId: string; kind: string }[]
+            producers: { producerId: string; kind: string; appData?: Record<string, unknown> }[]
           }>
         } | undefined) => {
           if (error || !data) {
@@ -365,7 +409,7 @@ export function useMediasoup(roomId: string, displayName: string, create = false
     })
 
     // New remote producer appeared
-    socket.on("newProducer", async ({ peerId: remotePeerId, displayName: remoteName, producerId, kind }) => {
+    socket.on("newProducer", async ({ peerId: remotePeerId, displayName: remoteName, producerId, kind, appData }) => {
       // Wait briefly for recv transport to be ready
       let attempts = 0
       const waitAndConsume = async () => {
@@ -375,13 +419,35 @@ export function useMediasoup(roomId: string, displayName: string, create = false
           }
           return
         }
-        await consumeProducer(remotePeerId, remoteName, producerId, kind as "audio" | "video")
+        await consumeProducer(remotePeerId, remoteName, producerId, kind as "audio" | "video", appData)
       }
       await waitAndConsume()
     })
 
     socket.on("peerLeft", ({ peerId: leftPeerId }) => {
       dispatch({ type: "PEER_LEFT", peerId: leftPeerId })
+    })
+
+    // A remote producer was closed (e.g. peer stopped screen sharing)
+    socket.on("producerClosed", ({ peerId: remotePeerId, producerId }) => {
+      // Find the consumer tied to this producer to learn its kind/source
+      let target: Consumer | undefined
+      for (const c of consumersRef.current.values()) {
+        if (c.producerId === producerId) {
+          target = c
+          break
+        }
+      }
+      if (!target) return
+      const source = (target.appData as Record<string, unknown>)?.source === "screen" ? "screen" : "media"
+      target.close()
+      consumersRef.current.delete(target.id)
+      dispatch({
+        type: "PEER_PRODUCER_CLOSED",
+        peerId: remotePeerId,
+        source,
+        kind: target.kind as "audio" | "video",
+      })
     })
   }, [roomId, displayName, state.status, setupTransports, consumeProducer])
 
@@ -401,6 +467,10 @@ export function useMediasoup(roomId: string, displayName: string, create = false
     recvTransportRef.current = null
     localStreamRef.current?.getTracks().forEach((t) => t.stop())
     localStreamRef.current = null
+    screenStreamRef.current?.getTracks().forEach((t) => t.stop())
+    screenStreamRef.current = null
+    screenVideoProducerRef.current = null
+    screenAudioProducerRef.current = null
     consumersRef.current.clear()
     dispatch({ type: "DISCONNECTED" })
   }, [roomId])
@@ -511,6 +581,76 @@ export function useMediasoup(roomId: string, displayName: string, create = false
   }, [])
 
   // -------------------------------------------------------------------------
+  // Screen sharing
+  // -------------------------------------------------------------------------
+  const stopScreenShare = useCallback(() => {
+    const socket = socketRef.current
+
+    for (const producer of [screenVideoProducerRef.current, screenAudioProducerRef.current]) {
+      if (!producer) continue
+      socket?.emit("closeProducer", {
+        roomId,
+        peerId: peerId.current,
+        producerId: producer.id,
+      })
+      producer.close()
+    }
+    screenVideoProducerRef.current = null
+    screenAudioProducerRef.current = null
+
+    screenStreamRef.current?.getTracks().forEach((t) => t.stop())
+    screenStreamRef.current = null
+
+    dispatch({ type: "SET_SCREEN_SHARING", isSharing: false })
+  }, [roomId])
+
+  const startScreenShare = useCallback(async () => {
+    const sendTransport = sendTransportRef.current
+    if (!sendTransport) return
+
+    try {
+      const displayStream = await navigator.mediaDevices.getDisplayMedia({
+        video: true,
+        audio: true,
+      })
+      screenStreamRef.current = displayStream
+
+      const videoTrack = displayStream.getVideoTracks()[0]
+      const audioTrack = displayStream.getAudioTracks()[0]
+
+      if (videoTrack) {
+        const producer = await sendTransport.produce({
+          track: videoTrack,
+          appData: { source: "screen" },
+        })
+        screenVideoProducerRef.current = producer
+        // User clicked the browser's native "Stop sharing" control
+        videoTrack.onended = () => stopScreenShare()
+      }
+
+      if (audioTrack) {
+        const producer = await sendTransport.produce({
+          track: audioTrack,
+          appData: { source: "screen" },
+        })
+        screenAudioProducerRef.current = producer
+      }
+
+      dispatch({ type: "SET_SCREEN_SHARING", isSharing: true })
+    } catch {
+      // User cancelled the picker or permission denied — silently ignore.
+    }
+  }, [stopScreenShare])
+
+  const toggleScreenShare = useCallback(async () => {
+    if (screenVideoProducerRef.current) {
+      stopScreenShare()
+    } else {
+      await startScreenShare()
+    }
+  }, [startScreenShare, stopScreenShare])
+
+  // -------------------------------------------------------------------------
   // Auto-join on mount, leave on unmount
   // -------------------------------------------------------------------------
   useEffect(() => {
@@ -528,10 +668,13 @@ export function useMediasoup(roomId: string, displayName: string, create = false
     localStream: state.localStream,
     isMicMuted: state.isMicMuted,
     isCamOff: state.isCamOff,
+    isScreenSharing: state.isScreenSharing,
+    localScreenStream: screenStreamRef.current,
     hasMic: state.hasMic,
     hasCam: state.hasCam,
     toggleMic,
     toggleCam,
+    toggleScreenShare,
     switchMic,
     leave,
   }
