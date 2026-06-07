@@ -50,7 +50,7 @@ const features = [
 
 export function Features() {
   return (
-    <section className="relative border-t border-border px-6 py-24 sm:py-32">
+    <section className="relative border-t border-border px-6 py-16 sm:py-20">
       {/* subtle glow */}
       <div
         aria-hidden="true"
@@ -70,7 +70,7 @@ export function Features() {
           </p>
         </div>
 
-        <div className="mt-16 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="mt-12 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {features.map((feature) => (
             <div
               key={feature.title}

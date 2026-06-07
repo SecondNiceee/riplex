@@ -9,7 +9,7 @@ const points = [
 
 export function QualityBanner() {
   return (
-    <section className="relative px-6 pb-24 sm:pb-32">
+    <section className="relative px-6 pb-16 sm:pb-20">
       <div className="mx-auto max-w-6xl">
         <div className="relative overflow-hidden rounded-[2rem] border border-border bg-card px-6 py-16 text-center sm:px-12 sm:py-24">
           {/* glow */}
