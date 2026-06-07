@@ -633,9 +633,12 @@ export function useMediasoup(roomId: string, displayName: string, create = false
     try {
       const displayStream = await navigator.mediaDevices.getDisplayMedia({
         video: {
-          width: { ideal: 1920 },
-          height: { ideal: 1080 },
-          frameRate: { ideal: 30 },
+          // Cap at true 1080p. max prevents the browser from sending a 4K
+          // frame (some monitors) while ideal keeps it as close to 1080 as
+          // the captured surface allows.
+          width: { ideal: 1920, max: 1920 },
+          height: { ideal: 1080, max: 1080 },
+          frameRate: { ideal: 30, max: 30 },
         },
         audio: true,
       })
@@ -652,10 +655,13 @@ export function useMediasoup(roomId: string, displayName: string, create = false
         }
         const producer = await sendTransport.produce({
           track: videoTrack,
-          // Push a high bitrate so on-screen text stays crisp.
-          encodings: [{ maxBitrate: 3_000_000 }],
+          // True 1080p needs a high bitrate to stay sharp. scaleResolutionDownBy:1
+          // forbids the encoder from downscaling to save bandwidth.
+          encodings: [{ maxBitrate: 5_000_000, scaleResolutionDownBy: 1 }],
           codecOptions: {
-            videoGoogleStartBitrate: 1000,
+            videoGoogleStartBitrate: 2000,
+            videoGoogleMaxBitrate: 5000,
+            videoGoogleMinBitrate: 1000,
           },
           appData: { source: "screen" },
         })
