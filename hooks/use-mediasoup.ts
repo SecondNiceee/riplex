@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, useCallback, useReducer } from "react"
+import { useEffect, useRef, useCallback, useReducer, useState } from "react"
 import { io, Socket } from "socket.io-client"
 import { Device } from "mediasoup-client"
 import type { Transport, Producer, Consumer } from "mediasoup-client/lib/types"
@@ -24,6 +24,43 @@ export type RoomStatus =
   | "connected"
   | "disconnected"
   | "error"
+
+export type ScreenQuality = "auto" | "720p" | "1080p"
+
+interface ScreenQualityPreset {
+  video: MediaTrackConstraints
+  // undefined maxBitrate => let WebRTC adapt freely (Auto)
+  maxBitrate?: number
+}
+
+export const SCREEN_QUALITY_PRESETS: Record<ScreenQuality, ScreenQualityPreset> = {
+  // Adaptive: WebRTC scales resolution/bitrate to the available bandwidth.
+  auto: {
+    video: {
+      width: { ideal: 1920 },
+      height: { ideal: 1080 },
+      frameRate: { ideal: 30 },
+    },
+  },
+  // 720p: lighter on bandwidth, smooth on weaker connections.
+  "720p": {
+    video: {
+      width: { ideal: 1280, max: 1280 },
+      height: { ideal: 720, max: 720 },
+      frameRate: { ideal: 30, max: 30 },
+    },
+    maxBitrate: 2_500_000,
+  },
+  // Full HD: pinned resolution + high bitrate for crisp text.
+  "1080p": {
+    video: {
+      width: { ideal: 1920, max: 1920 },
+      height: { ideal: 1080, max: 1080 },
+      frameRate: { ideal: 30, max: 30 },
+    },
+    maxBitrate: 5_000_000,
+  },
+}
 
 interface State {
   status: RoomStatus
@@ -158,6 +195,9 @@ export function useMediasoup(roomId: string, displayName: string, create = false
   const screenAudioProducerRef = useRef<Producer | null>(null)
   const screenStreamRef = useRef<MediaStream | null>(null)
   const selectedMicIdRef = useRef<string | undefined>(undefined)
+  // currently selected screen-share quality preset
+  const screenQualityRef = useRef<ScreenQuality>("auto")
+  const [screenQuality, setScreenQualityState] = useState<ScreenQuality>("auto")
   // consumerId -> Consumer
   const consumersRef = useRef<Map<string, Consumer>>(new Map())
   // producerIds that were closed before we finished consuming them (race guard)
@@ -631,15 +671,9 @@ export function useMediasoup(roomId: string, displayName: string, create = false
     if (!sendTransport) return
 
     try {
+      const preset = SCREEN_QUALITY_PRESETS[screenQualityRef.current]
       const displayStream = await navigator.mediaDevices.getDisplayMedia({
-        video: {
-          // Cap at true 1080p. max prevents the browser from sending a 4K
-          // frame (some monitors) while ideal keeps it as close to 1080 as
-          // the captured surface allows.
-          width: { ideal: 1920, max: 1920 },
-          height: { ideal: 1080, max: 1080 },
-          frameRate: { ideal: 30, max: 30 },
-        },
+        video: preset.video,
         audio: true,
       })
       screenStreamRef.current = displayStream
@@ -653,15 +687,16 @@ export function useMediasoup(roomId: string, displayName: string, create = false
         if ("contentHint" in videoTrack) {
           videoTrack.contentHint = "detail"
         }
+        // Fixed-quality presets pin the resolution and bitrate; Auto lets
+        // WebRTC adapt to bandwidth on its own.
+        const encoding: RTCRtpEncodingParameters = preset.maxBitrate
+          ? { maxBitrate: preset.maxBitrate, scaleResolutionDownBy: 1 }
+          : {}
         const producer = await sendTransport.produce({
           track: videoTrack,
-          // True 1080p needs a high bitrate to stay sharp. scaleResolutionDownBy:1
-          // forbids the encoder from downscaling to save bandwidth.
-          encodings: [{ maxBitrate: 5_000_000, scaleResolutionDownBy: 1 }],
+          encodings: [encoding],
           codecOptions: {
-            videoGoogleStartBitrate: 2000,
-            videoGoogleMaxBitrate: 5000,
-            videoGoogleMinBitrate: 1000,
+            videoGoogleStartBitrate: preset.maxBitrate ? 2000 : 1000,
           },
           appData: { source: "screen" },
         })
@@ -692,6 +727,20 @@ export function useMediasoup(roomId: string, displayName: string, create = false
     }
   }, [startScreenShare, stopScreenShare])
 
+  const setScreenQuality = useCallback(
+    async (quality: ScreenQuality) => {
+      screenQualityRef.current = quality
+      setScreenQualityState(quality)
+      // If a screen share is already running, restart it so the new preset
+      // (resolution + bitrate) takes effect immediately.
+      if (screenVideoProducerRef.current) {
+        stopScreenShare()
+        await startScreenShare()
+      }
+    },
+    [startScreenShare, stopScreenShare],
+  )
+
   // -------------------------------------------------------------------------
   // Auto-join on mount, leave on unmount
   // -------------------------------------------------------------------------
@@ -717,6 +766,8 @@ export function useMediasoup(roomId: string, displayName: string, create = false
     toggleMic,
     toggleCam,
     toggleScreenShare,
+    screenQuality,
+    setScreenQuality,
     switchMic,
     leave,
   }

@@ -11,13 +11,20 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { VideoTile } from "@/components/video-tile"
 import { EnableSoundBanner } from "@/components/enable-sound-banner"
-import { useMediasoup } from "@/hooks/use-mediasoup"
+import { useMediasoup, type ScreenQuality } from "@/hooks/use-mediasoup"
 import { useAudioDevices } from "@/hooks/use-audio-devices"
 import { cn } from "@/lib/utils"
+
+const SCREEN_QUALITY_OPTIONS: { value: ScreenQuality; label: string }[] = [
+  { value: "auto", label: "Авто" },
+  { value: "720p", label: "720p" },
+  { value: "1080p", label: "1080p (Full HD)" },
+]
 
 // ---------------------------------------------------------------------------
 // Page
@@ -53,6 +60,8 @@ export default function RoomPage({
     toggleMic,
     toggleCam,
     toggleScreenShare,
+    screenQuality,
+    setScreenQuality,
     switchMic,
     leave,
   } = useMediasoup(roomId, displayName, create === "true")
@@ -333,18 +342,47 @@ export default function RoomPage({
           {isCamOff ? <VideoOff className="size-5" /> : <Video className="size-5" />}
         </Button>
 
-        <Button
-          variant="outline"
-          size="icon"
-          onClick={toggleScreenShare}
-          className={cn(
-            "size-12 rounded-full",
-            isScreenSharing && "border-foreground bg-foreground/10 text-foreground hover:bg-foreground/20",
-          )}
-          aria-label={isScreenSharing ? "Остановить демонстрацию экрана" : "Демонстрация экрана"}
-        >
-          {isScreenSharing ? <MonitorOff className="size-5" /> : <MonitorUp className="size-5" />}
-        </Button>
+        {/* Screen share button + quality picker */}
+        <div className="flex items-center">
+          <Button
+            variant="outline"
+            onClick={toggleScreenShare}
+            className={cn(
+              "size-12 rounded-full rounded-r-none border-r-0",
+              isScreenSharing && "border-foreground bg-foreground/10 text-foreground hover:bg-foreground/20",
+            )}
+            aria-label={isScreenSharing ? "Остановить демонстрацию экрана" : "Демонстрация экрана"}
+          >
+            {isScreenSharing ? <MonitorOff className="size-5" /> : <MonitorUp className="size-5" />}
+          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="outline"
+                className={cn(
+                  "h-12 w-6 rounded-l-none px-1",
+                  isScreenSharing && "border-foreground bg-foreground/10 text-foreground hover:bg-foreground/20",
+                )}
+                aria-label="Качество демонстрации экрана"
+              >
+                <ChevronDown className="size-3" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="center" side="top">
+              <DropdownMenuLabel>Качество экрана</DropdownMenuLabel>
+              {SCREEN_QUALITY_OPTIONS.map((opt) => (
+                <DropdownMenuItem
+                  key={opt.value}
+                  onSelect={() => setScreenQuality(opt.value)}
+                  className="flex items-center justify-between gap-4"
+                >
+                  <span className={cn(screenQuality === opt.value && "font-medium")}>{opt.label}</span>
+                  {screenQuality === opt.value && <Check className="size-3.5 text-foreground" />}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
 
         <Button
           variant="destructive"
