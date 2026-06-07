@@ -112,12 +112,15 @@ export default function RoomPage({
   // -------------------------------------------------------------------------
   const allPeers = [...peers.values()]
 
-  // Count screen-share tiles (local + any remote peer currently sharing).
+  // Collect every active screen share (local + remote) as primary "stage" tiles.
   const remoteScreens = allPeers.filter((p) => p.screenStream)
-  const screenTileCount = (isScreenSharing && localScreenStream ? 1 : 0) + remoteScreens.length
-  const totalTiles = allPeers.length + 1 + screenTileCount // +1 for local camera
+  const hasScreenShare = (isScreenSharing && localScreenStream) || remoteScreens.length > 0
 
-  // Grid layout based on participant count
+  // Camera tiles (local + remote) shown either in the grid or the filmstrip.
+  const totalTiles =
+    allPeers.length + 1 + (isScreenSharing && localScreenStream ? 1 : 0) + remoteScreens.length
+
+  // Grid layout based on participant count (only used when nobody is sharing).
   const gridClass =
     totalTiles === 1
       ? "grid-cols-1"
@@ -126,6 +129,58 @@ export default function RoomPage({
         : totalTiles <= 4
           ? "grid-cols-2"
           : "grid-cols-3"
+
+  // Camera tiles rendered as a reusable list so they can live in the grid
+  // (no screen share) or in the filmstrip (screen share active).
+  const cameraTiles = (
+    <>
+      <VideoTile
+        stream={localStream ?? undefined}
+        speakingStream={localStream ?? undefined}
+        displayName={displayName}
+        isMuted={isMicMuted}
+        isCamOff={isCamOff}
+        isLocal
+        className="h-full w-full"
+      />
+      {allPeers.map((peer) => (
+        <VideoTile
+          key={peer.peerId}
+          stream={peer.videoStream}
+          audioStream={peer.audioStream}
+          displayName={peer.displayName}
+          className="h-full w-full"
+        />
+      ))}
+    </>
+  )
+
+  // Screen share tiles rendered as the large "stage" content.
+  const screenTiles = (
+    <>
+      {isScreenSharing && localScreenStream && (
+        <VideoTile
+          key="local-screen"
+          stream={localScreenStream}
+          speakingStream={undefined}
+          displayName={displayName}
+          isLocal
+          isScreen
+          className="h-full w-full"
+        />
+      )}
+      {remoteScreens.map((peer) => (
+        <VideoTile
+          key={`${peer.peerId}-screen`}
+          stream={peer.screenStream}
+          audioStream={peer.screenAudioStream}
+          displayName={peer.displayName}
+          isScreen
+          className="h-full w-full"
+        />
+      ))}
+    </>
+  )
 
   return (
     <div className="flex h-screen flex-col bg-background">
@@ -171,55 +226,51 @@ export default function RoomPage({
         </div>
       </header>
 
-      {/* Video grid */}
-      <main className={cn("grid flex-1 gap-2 p-3", gridClass)}>
-        {/* Local tile */}
-        <VideoTile
-          stream={localStream ?? undefined}
-          speakingStream={localStream ?? undefined}
-          displayName={displayName}
-          isMuted={isMicMuted}
-          isCamOff={isCamOff}
-          isLocal
-          className="h-full w-full"
-        />
+      {/* Video area */}
+      {hasScreenShare ? (
+        // Speaker layout: screen share takes the stage, cameras in a filmstrip.
+        <main className="flex flex-1 flex-col gap-2 overflow-hidden p-3 lg:flex-row">
+          {/* Stage — one or more shared screens */}
+          <div
+            className={cn(
+              "grid min-h-0 flex-1 gap-2",
+              remoteScreens.length + (isScreenSharing && localScreenStream ? 1 : 0) > 1
+                ? "grid-cols-1 sm:grid-cols-2"
+                : "grid-cols-1",
+            )}
+          >
+            {screenTiles}
+          </div>
 
-        {/* Remote tiles */}
-        {allPeers.map((peer) => (
-          <VideoTile
-            key={peer.peerId}
-            stream={peer.videoStream}
-            audioStream={peer.audioStream}
-            displayName={peer.displayName}
-            className="h-full w-full"
-          />
-        ))}
-
-        {/* Local screen share tile */}
-        {isScreenSharing && localScreenStream && (
-          <VideoTile
-            key="local-screen"
-            stream={localScreenStream}
-            speakingStream={undefined}
-            displayName={displayName}
-            isLocal
-            isScreen
-            className="h-full w-full"
-          />
-        )}
-
-        {/* Remote screen share tiles */}
-        {remoteScreens.map((peer) => (
-          <VideoTile
-            key={`${peer.peerId}-screen`}
-            stream={peer.screenStream}
-            audioStream={peer.screenAudioStream}
-            displayName={peer.displayName}
-            isScreen
-            className="h-full w-full"
-          />
-        ))}
-      </main>
+          {/* Filmstrip — camera tiles */}
+          <div className="flex shrink-0 gap-2 overflow-x-auto lg:w-52 lg:flex-col lg:overflow-y-auto lg:overflow-x-hidden">
+            {[
+              <VideoTile
+                key="local"
+                stream={localStream ?? undefined}
+                speakingStream={localStream ?? undefined}
+                displayName={displayName}
+                isMuted={isMicMuted}
+                isCamOff={isCamOff}
+                isLocal
+                className="aspect-video h-28 w-auto shrink-0 lg:h-auto lg:w-full"
+              />,
+              ...allPeers.map((peer) => (
+                <VideoTile
+                  key={peer.peerId}
+                  stream={peer.videoStream}
+                  audioStream={peer.audioStream}
+                  displayName={peer.displayName}
+                  className="aspect-video h-28 w-auto shrink-0 lg:h-auto lg:w-full"
+                />
+              )),
+            ]}
+          </div>
+        </main>
+      ) : (
+        // Default grid layout when nobody is sharing their screen.
+        <main className={cn("grid flex-1 gap-2 p-3", gridClass)}>{cameraTiles}</main>
+      )}
 
       {/* Controls */}
       <footer className="flex items-center justify-center gap-3 border-t border-border px-5 py-4">

@@ -160,6 +160,8 @@ export function useMediasoup(roomId: string, displayName: string, create = false
   const selectedMicIdRef = useRef<string | undefined>(undefined)
   // consumerId -> Consumer
   const consumersRef = useRef<Map<string, Consumer>>(new Map())
+  // producerIds that were closed before we finished consuming them (race guard)
+  const pendingClosedProducersRef = useRef<Set<string>>(new Set())
 
   // -------------------------------------------------------------------------
   // consume a remote producer
@@ -210,6 +212,21 @@ export function useMediasoup(roomId: string, displayName: string, create = false
             rtpParameters: data.rtpParameters as RTCRtpParameters,
             appData: { source },
           })
+
+          // Race guard: the producer may have been closed (e.g. peer stopped
+          // screen sharing) before this consumer finished being created. If so,
+          // tear it down immediately instead of leaving a stale tile.
+          if (pendingClosedProducersRef.current.has(data.producerId)) {
+            pendingClosedProducersRef.current.delete(data.producerId)
+            consumer.close()
+            dispatch({
+              type: "PEER_PRODUCER_CLOSED",
+              peerId: remotePeerId,
+              source,
+              kind,
+            })
+            return
+          }
 
           consumersRef.current.set(consumer.id, consumer)
 
@@ -438,7 +455,12 @@ export function useMediasoup(roomId: string, displayName: string, create = false
           break
         }
       }
-      if (!target) return
+      if (!target) {
+        // The consumer for this producer hasn't been created yet (fast
+        // start/stop). Remember it so consumeProducer can discard it on arrival.
+        pendingClosedProducersRef.current.add(producerId)
+        return
+      }
       const source = (target.appData as Record<string, unknown>)?.source === "screen" ? "screen" : "media"
       target.close()
       consumersRef.current.delete(target.id)
@@ -610,7 +632,11 @@ export function useMediasoup(roomId: string, displayName: string, create = false
 
     try {
       const displayStream = await navigator.mediaDevices.getDisplayMedia({
-        video: true,
+        video: {
+          width: { ideal: 1920 },
+          height: { ideal: 1080 },
+          frameRate: { ideal: 30 },
+        },
         audio: true,
       })
       screenStreamRef.current = displayStream
@@ -619,8 +645,18 @@ export function useMediasoup(roomId: string, displayName: string, create = false
       const audioTrack = displayStream.getAudioTracks()[0]
 
       if (videoTrack) {
+        // Hint the encoder to optimise for sharp text/detail rather than
+        // smooth motion — important for sharing documents, code, slides.
+        if ("contentHint" in videoTrack) {
+          videoTrack.contentHint = "detail"
+        }
         const producer = await sendTransport.produce({
           track: videoTrack,
+          // Push a high bitrate so on-screen text stays crisp.
+          encodings: [{ maxBitrate: 3_000_000 }],
+          codecOptions: {
+            videoGoogleStartBitrate: 1000,
+          },
           appData: { source: "screen" },
         })
         screenVideoProducerRef.current = producer
