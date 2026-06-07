@@ -58,6 +58,13 @@ export interface CloseProducerPayload {
   producerId: string
 }
 
+export interface PauseProducerPayload {
+  roomId: string
+  peerId: string
+  producerId: string
+  paused: boolean
+}
+
 // ---------------------------------------------------------------------------
 // Socket event payloads  (server → client)
 // ---------------------------------------------------------------------------

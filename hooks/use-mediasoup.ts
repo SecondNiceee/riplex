@@ -569,10 +569,32 @@ export function useMediasoup(roomId: string, displayName: string, create = false
       return
     }
 
-    // Already have track — just mute/unmute
-    existing.enabled = !existing.enabled
-    dispatch({ type: "TOGGLE_MIC", isMuted: !existing.enabled })
-  }, [])
+    // Already have track — just mute/unmute.
+    // We both disable the local track AND pause the mediasoup producer.
+    // Disabling the track alone is unreliable: the producer keeps sending RTP,
+    // so remote peers can still hear you. Pausing the producer stops the flow
+    // on the server side, guaranteeing silence when muted.
+    const nextEnabled = !existing.enabled
+    existing.enabled = nextEnabled
+
+    const producer = audioProducerRef.current
+    const socket = socketRef.current
+    if (producer) {
+      if (nextEnabled) {
+        producer.resume()
+      } else {
+        producer.pause()
+      }
+      socket?.emit("pauseProducer", {
+        roomId,
+        peerId: peerId.current,
+        producerId: producer.id,
+        paused: !nextEnabled,
+      })
+    }
+
+    dispatch({ type: "TOGGLE_MIC", isMuted: !nextEnabled })
+  }, [roomId])
 
   // Switch to a different microphone device mid-call
   const switchMic = useCallback(async (deviceId: string) => {

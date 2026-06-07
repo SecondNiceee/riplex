@@ -12,6 +12,7 @@ import type {
   ConsumePayload,
   ResumeConsumerPayload,
   CloseProducerPayload,
+  PauseProducerPayload,
 } from './types'
 
 // ---------------------------------------------------------------------------
@@ -244,6 +245,36 @@ export function setupSocketIO(httpServer: HttpServer, worker: Worker): Server {
 
           room.closeProducer(peerId, producerId)
           socket.to(roomId).emit('producerClosed', { peerId, producerId })
+          if (callback) ack(callback, undefined)
+        } catch (e) {
+          if (callback) err(callback as Callback<never>, (e as Error).message)
+        }
+      },
+    )
+
+    // -----------------------------------------------------------------------
+    // pauseProducer / resumeProducer  (e.g. mute / unmute microphone)
+    // -----------------------------------------------------------------------
+    socket.on(
+      'pauseProducer',
+      async (payload: PauseProducerPayload, callback?: Callback<void>) => {
+        const { roomId, peerId, producerId, paused } = payload
+
+        try {
+          const room = rooms.get(roomId)
+          if (!room) {
+            if (callback) return err(callback as Callback<never>, `Room ${roomId} not found`)
+            return
+          }
+
+          if (paused) {
+            await room.pauseProducer(peerId, producerId)
+          } else {
+            await room.resumeProducer(peerId, producerId)
+          }
+
+          // Inform other peers so they can update UI (e.g. mute indicator)
+          socket.to(roomId).emit('producerPaused', { peerId, producerId, paused })
           if (callback) ack(callback, undefined)
         } catch (e) {
           if (callback) err(callback as Callback<never>, (e as Error).message)
