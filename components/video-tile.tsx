@@ -36,6 +36,14 @@ export function VideoTile({
   const analysedStream = isLocal ? speakingStream : audioStream
   const speaking = useSpeaking(analysedStream, !isMuted)
 
+  // Compute up to two initials from the display name for the avatar.
+  const initials = displayName
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((w) => w[0]?.toUpperCase() ?? "")
+    .join("")
+
   useEffect(() => {
     const video = videoRef.current
     if (!video || !stream) return
@@ -79,28 +87,37 @@ export function VideoTile({
 
       {/* Cam off placeholder */}
       {(isCamOff || !stream) && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
-          <div className="flex size-16 items-center justify-center rounded-full bg-muted">
-            <User className="size-7 text-muted-foreground" />
+        <div className="absolute inset-0 flex items-center justify-center">
+          <div
+            className={cn(
+              "flex items-center justify-center rounded-full bg-muted ring-1 ring-border/60 transition-all",
+              "size-12 sm:size-14",
+              speaking && "ring-2 ring-green-500",
+            )}
+          >
+            {initials ? (
+              <span className="text-sm font-semibold text-foreground sm:text-base">{initials}</span>
+            ) : (
+              <User className="size-6 text-muted-foreground" />
+            )}
           </div>
-          <span className="text-sm font-medium text-foreground">{displayName}</span>
         </div>
       )}
 
       {/* Bottom bar */}
-      <div className="absolute bottom-0 left-0 right-0 flex items-center justify-between px-3 py-2">
-        <span className="rounded-md bg-black/50 px-2 py-0.5 text-xs font-medium text-white backdrop-blur-sm">
+      <div className="absolute bottom-0 left-0 right-0 flex items-center justify-between gap-2 px-2 py-1.5">
+        <span className="max-w-[70%] truncate rounded-md bg-black/45 px-1.5 py-0.5 text-[11px] font-medium leading-none text-white backdrop-blur-sm">
           {isLocal ? `${displayName} (вы)` : displayName}
         </span>
         <div className="flex items-center gap-1">
           {isMuted && (
-            <span className="flex size-6 items-center justify-center rounded-full bg-destructive/90">
-              <MicOff className="size-3 text-white" />
+            <span className="flex size-5 items-center justify-center rounded-full bg-destructive/90">
+              <MicOff className="size-2.5 text-white" />
             </span>
           )}
           {isCamOff && (
-            <span className="flex size-6 items-center justify-center rounded-full bg-muted/90">
-              <VideoOff className="size-3 text-muted-foreground" />
+            <span className="flex size-5 items-center justify-center rounded-full bg-black/45 backdrop-blur-sm">
+              <VideoOff className="size-2.5 text-white" />
             </span>
           )}
         </div>
