@@ -202,6 +202,44 @@ export function useMediasoup(roomId: string, displayName: string, create = false
   const consumersRef = useRef<Map<string, Consumer>>(new Map())
   // producerIds that were closed before we finished consuming them (race guard)
   const pendingClosedProducersRef = useRef<Set<string>>(new Set())
+  // whether an initial join has completed. Distinguishes a first connect from
+  // a socket.io reconnection after a transient network drop.
+  const hasJoinedRef = useRef(false)
+  // guards against firing several overlapping ICE restarts for one transport
+  const iceRestartingRef = useRef<Set<string>>(new Set())
+
+  // -------------------------------------------------------------------------
+  // Restart ICE on a transport whose network path broke (transient drop / VPN
+  // switch). The transport, its producers and consumers all stay alive — only
+  // the ICE candidates are renegotiated, so media resumes without re-creating
+  // anything and the peer never leaves the room.
+  // -------------------------------------------------------------------------
+  const restartIceForTransport = useCallback(
+    (transport: Transport | null) => {
+      const socket = socketRef.current
+      if (!socket || !transport || transport.closed) return
+      if (iceRestartingRef.current.has(transport.id)) return
+      iceRestartingRef.current.add(transport.id)
+
+      socket.emit(
+        "restartIce",
+        { roomId, peerId: peerId.current, transportId: transport.id },
+        async (error: string | null, iceParameters: object | undefined) => {
+          iceRestartingRef.current.delete(transport.id)
+          if (error || !iceParameters) {
+            console.error("[useMediasoup] restartIce error:", error)
+            return
+          }
+          try {
+            await transport.restartIce({ iceParameters: iceParameters as RTCIceParameters })
+          } catch (e) {
+            console.error("[useMediasoup] transport.restartIce failed:", e)
+          }
+        },
+      )
+    },
+    [roomId],
+  )
 
   // -------------------------------------------------------------------------
   // consume a remote producer
@@ -342,6 +380,16 @@ export function useMediasoup(roomId: string, displayName: string, create = false
                   else callback()
                 },
               )
+            })
+
+            // When the underlying ICE/DTLS path breaks (transient network drop,
+            // VPN toggle), WebRTC reports "disconnected" then "failed". Instead
+            // of tearing the call down, renegotiate ICE so media resumes on the
+            // new network path. The peer stays in the room the whole time.
+            transport.on("connectionstatechange", (connectionState) => {
+              if (connectionState === "disconnected" || connectionState === "failed") {
+                restartIceForTransport(transport as Transport)
+              }
             })
 
             if (direction === "send") {
