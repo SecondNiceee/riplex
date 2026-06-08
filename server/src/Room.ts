@@ -128,6 +128,24 @@ export class Room {
   }
 
   // ---------------------------------------------------------------------------
+  // ICE Restart — re-negotiate ICE candidates after transient network drop /
+  // VPN toggle without tearing down producers, consumers or the peer itself.
+  // ---------------------------------------------------------------------------
+
+  async restartIce(peerId: string, transportId: string): Promise<object> {
+    const peer = this.peers.get(peerId)
+    if (!peer) throw new Error(`Peer ${peerId} not found`)
+
+    const transport = peer.getTransport(transportId)
+    if (!transport) throw new Error(`Transport ${transportId} not found`)
+
+    // restartIce() generates fresh ICE credentials that the client uses to
+    // kick-start a new connectivity check on the current DTLS session.
+    const iceParameters = await transport.restartIce()
+    return iceParameters
+  }
+
+  // ---------------------------------------------------------------------------
   // Produce
   // ---------------------------------------------------------------------------
 

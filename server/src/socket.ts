@@ -64,6 +64,12 @@ export function setupSocketIO(httpServer: HttpServer, worker: Worker): Server {
       origin: CLIENT_ORIGIN,
       methods: ['GET', 'POST'],
     },
+    // Give the client enough time to survive a ~5-second transient network
+    // drop (VPN toggle, Wi-Fi hand-off) without being treated as disconnected.
+    // Default pingTimeout is 20 s — raising it to 30 s and keeping pingInterval
+    // at 10 s means three missed pings before the server gives up.
+    pingTimeout: 30000,
+    pingInterval: 10000,
   })
 
   io.on('connection', (socket: Socket) => {
@@ -149,6 +155,28 @@ export function setupSocketIO(httpServer: HttpServer, worker: Worker): Server {
 
           await room.connectTransport(peerId, transportId, dtlsParameters)
           ack(callback, undefined)
+        } catch (e) {
+          err(callback as Callback<never>, (e as Error).message)
+        }
+      },
+    )
+
+    // -----------------------------------------------------------------------
+    // restartIce  (called by client when transport ICE state => disconnected/failed)
+    // -----------------------------------------------------------------------
+    socket.on(
+      'restartIce',
+      async (
+        payload: { roomId: string; peerId: string; transportId: string },
+        callback: Callback<object>,
+      ) => {
+        const { roomId, peerId, transportId } = payload
+        try {
+          const room = rooms.get(roomId)
+          if (!room) return err(callback as Callback<never>, `Room ${roomId} not found`)
+
+          const iceParameters = await room.restartIce(peerId, transportId)
+          ack(callback, iceParameters)
         } catch (e) {
           err(callback as Callback<never>, (e as Error).message)
         }
