@@ -10,6 +10,7 @@ import { getDisplayName } from "@/lib/display-name"
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuTrigger,
@@ -369,17 +370,19 @@ export default function RoomPage({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="center" side="top">
-              <DropdownMenuLabel>Качество экрана</DropdownMenuLabel>
-              {SCREEN_QUALITY_OPTIONS.map((opt) => (
-                <DropdownMenuItem
-                  key={opt.value}
-                  onSelect={() => setScreenQuality(opt.value)}
-                  className="flex items-center justify-between gap-4"
-                >
-                  <span className={cn(screenQuality === opt.value && "font-medium")}>{opt.label}</span>
-                  {screenQuality === opt.value && <Check className="size-3.5 text-foreground" />}
-                </DropdownMenuItem>
-              ))}
+              <DropdownMenuGroup>
+                <DropdownMenuLabel>Качество экрана</DropdownMenuLabel>
+                {SCREEN_QUALITY_OPTIONS.map((opt) => (
+                  <DropdownMenuItem
+                    key={opt.value}
+                    onSelect={() => setScreenQuality(opt.value)}
+                    className="flex items-center justify-between gap-4"
+                  >
+                    <span className={cn(screenQuality === opt.value && "font-medium")}>{opt.label}</span>
+                    {screenQuality === opt.value && <Check className="size-3.5 text-foreground" />}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuGroup>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>

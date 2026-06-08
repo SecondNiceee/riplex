@@ -457,14 +457,45 @@ export function useMediasoup(roomId: string, displayName: string, create = false
     const localStream = new MediaStream()
     localStreamRef.current = localStream
 
-    const socket = io(SERVER_URL, { transports: ["websocket"] })
+    const socket = io(SERVER_URL, {
+      transports: ["websocket"],
+      // Keep reconnecting indefinitely with short delays so a ~1-second network
+      // blip re-establishes the signaling channel quickly. The server's
+      // pingTimeout (30 s) ensures the peer is not evicted during this window.
+      reconnection: true,
+      reconnectionAttempts: Infinity,
+      reconnectionDelay: 500,
+      reconnectionDelayMax: 3000,
+    })
     socketRef.current = socket
 
     socket.on("connect_error", (e) => {
-      dispatch({ type: "ERROR", error: `Не удалось подключиться к серверу: ${e.message}` })
+      // Only surface the error on the very first connection attempt.
+      // Subsequent reconnect failures are handled silently by socket.io's
+      // built-in retry logic — we do not want to flip the UI to "error" just
+      // because the network hiccupped for a moment.
+      if (!hasJoinedRef.current) {
+        dispatch({ type: "ERROR", error: `Не удалось подключиться к серверу: ${e.message}` })
+      }
     })
 
     socket.on("connect", async () => {
+      // -----------------------------------------------------------------------
+      // RECONNECT path — socket.io re-established the signaling channel after a
+      // transient network drop. The mediasoup session (Device, transports,
+      // producers, consumers) is still intact on the server because the peer
+      // was NOT removed (pingTimeout keeps it alive for ~30 s). All we need to
+      // do is re-negotiate ICE on both transports so RTP can flow again.
+      // -----------------------------------------------------------------------
+      if (hasJoinedRef.current) {
+        restartIceForTransport(sendTransportRef.current)
+        restartIceForTransport(recvTransportRef.current)
+        return
+      }
+
+      // -----------------------------------------------------------------------
+      // FIRST CONNECT path — normal join sequence.
+      // -----------------------------------------------------------------------
       const device = new Device()
       deviceRef.current = device
 
@@ -495,6 +526,9 @@ export function useMediasoup(roomId: string, displayName: string, create = false
           await device.load({ routerRtpCapabilities: data.rtpCapabilities as RTCRtpCapabilities })
 
           dispatch({ type: "CONNECTED", localStream })
+
+          // Mark as joined so reconnects follow the ICE-restart path above.
+          hasJoinedRef.current = true
 
           // Register existing peers immediately so the participant count is
           // accurate even before any of them produce media.
@@ -582,6 +616,10 @@ export function useMediasoup(roomId: string, displayName: string, create = false
     screenVideoProducerRef.current = null
     screenAudioProducerRef.current = null
     consumersRef.current.clear()
+    // Reset join state so a subsequent join() (e.g. re-entering a room after
+    // an intentional leave) follows the full first-connect path, not reconnect.
+    hasJoinedRef.current = false
+    iceRestartingRef.current.clear()
     dispatch({ type: "DISCONNECTED" })
   }, [roomId])
 
